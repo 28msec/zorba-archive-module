@@ -1,0 +1,1 @@
+DECLARE_ZORBA_MODULE (URI "http://www.expath.org/ns/zip2" VERSION 1.0 FILE "zip.xq")
