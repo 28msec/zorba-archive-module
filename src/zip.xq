@@ -1,4 +1,4 @@
-xquery version "3.0"
+xquery version "3.0";
 (:
  : Copyright 2011 The FLWOR Foundation.
  :
@@ -15,7 +15,11 @@ xquery version "3.0"
  : limitations under the License.
 :)
 
-module namespace zip = "http://www.expath.org/ns/zip2";
+module namespace zip = "http://www.expath.org/ns/zip";
+
+declare namespace ver = "http://www.zorba-xquery.com/options/versioning";
+declare option ver:module-version "1.0";
+
 (:~
  : Create a new zip archiving according to the given spec.
  : The contents can be string and base64Binary items.
@@ -44,7 +48,7 @@ module namespace zip = "http://www.expath.org/ns/zip2";
  :)
 declare function zip:create($entries as element(entries), $contents as item()*)
     as xs:base64Binary external;
- 
+    
 (:~
  : Return the specification of the given zip archive.
  :

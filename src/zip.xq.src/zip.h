@@ -8,7 +8,7 @@
 #include <zorba/function.h>
 #include <zorba/dynamic_context.h>
 
-#define ZIP_MODULE_NAMESPACE "http://www.expath.org/ns/zip2"
+#define ZIP_MODULE_NAMESPACE "http://www.expath.org/ns/zip"
 
 namespace zorba { namespace zip {
 
@@ -52,13 +52,12 @@ namespace zorba { namespace zip {
     protected:
       const ZipModule* theModule;
 
+      static void 
+        processEntries(zorba::Item entries_node);
+
       static void
         throwError(const char*, const std::string);
 
-      XQuery_t
-        getQuery(
-          const zorba::DynamicContext* dctx,
-          const zorba::String& aIdent) const;
     public:
 
       ZipFunction(const ZipModule* module);
