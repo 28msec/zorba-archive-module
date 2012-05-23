@@ -10,6 +10,9 @@
 
 #define ZIP_MODULE_NAMESPACE "http://www.expath.org/ns/zip"
 
+#define MAX_BUF 65536
+#define MAX_PATH_LENGTH 512
+
 namespace zorba { namespace zip {
 
   class ZipModule : public ExternalModule {
@@ -50,10 +53,120 @@ namespace zorba { namespace zip {
   class ZipFunction : public ContextualExternalFunction
   {
     protected:
+      class ZipEntry
+      {
+      private:
+        int compressionLevel;
+        int uncompressedSize;
+        bool deleteEntry;
+        String entryEncoding;
+        String entryPath;
+
+      public:
+        ZipEntry(String entry)
+        {
+          entryPath = entry;
+          deleteEntry = false;
+        }
+        ~ZipEntry(){}
+
+        void setCompressionLevel(int level)
+        {
+          compressionLevel = level;
+        }
+        void setDeleteEntry(bool del)
+        {
+          deleteEntry = del;
+        }
+        void setEntryEncoding(String encoding)
+        {
+          entryEncoding = encoding;
+        }
+        void setUncompressedSize(int size)
+        {
+          uncompressedSize = size;
+        }
+        int getCompressionLevel()
+        {
+          return compressionLevel;
+        }
+        bool isDeleting()
+        {
+          return deleteEntry;
+        }
+        String getEntryEncoding()
+        {
+          return entryEncoding;
+        }
+        int getUncompressedSize()
+        {
+          return uncompressedSize;
+        }
+        String getPath()
+        {
+          return entryPath;
+        }
+      };
+
+      class ZipEntries
+      {
+      private:
+        int compressionLevel;
+        int compressedSize;
+        int uncompressedSize;
+        bool encrypted;
+        //lastmodified check time unix
+        std::vector<ZipEntry> entryList;
+
+      public:
+
+        ZipEntries(){ encrypted = false; }
+        ~ZipEntries(){}
+
+        void setCompressionLevel(int level)
+        {
+          compressionLevel = level;
+        }
+        void setCompressedSize(int size)
+        {
+          compressedSize = size;
+        }
+        void setUncompressedSize(int size)
+        {
+          uncompressedSize = size;
+        }
+        void setEncrypted(bool encrypt)
+        {
+          encrypted = encrypt;
+        }
+        int getCompressionLevel()
+        {
+          return compressionLevel;
+        }
+        int getCompressedSize()
+        {
+          return compressedSize;
+        }
+        int getUncompressedSize()
+        {
+          return uncompressedSize;
+        }
+        bool isEncrypted()
+        {
+          return encrypted;
+        }
+        void insertEntry(ZipEntry aEntry)
+        {
+          entryList.push_back(aEntry);
+        }
+        Item getTree();
+
+      };
+
       const ZipModule* theModule;
 
       static void 
-        processEntries(zorba::Item entries_node);
+        processEntries(zorba::Item entries_node, ZipEntries& entries);
 
       static void
         throwError(const char*, const std::string);
@@ -84,6 +197,10 @@ namespace zorba { namespace zip {
   };
 
   class EntriesFunction : public ZipFunction{
+    private:
+      static void 
+        list_archive(const char *zippath, ZipEntries& entries);
+
     public:
       EntriesFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
 

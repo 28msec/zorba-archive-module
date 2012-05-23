@@ -67,7 +67,11 @@ declare function zip:create($entries as element(entries), $contents as item()*)
  :
  : @return specification
  :)
-declare function zip:entries($zip as xs:base64Binary)
+(:~
+ :declare function zip:entries($zip as xs:base64Binary)
+ :   as element(entries) external;
+ :)
+declare function zip:entries($zip as xs:string)
     as element(entries) external;
  
 (:~
