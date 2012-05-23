@@ -15,7 +15,9 @@
 #include "archive.h"
 #include "archive_entry.h"
 
+#ifdef WIN32
 #include <MMSystem.h>
+#endif
 
 #include "zip.h"
 
