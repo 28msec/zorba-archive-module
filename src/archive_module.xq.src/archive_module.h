@@ -1,5 +1,5 @@
-#ifndef _ORG_EXPATH_WWW_NS_ZIP2_H_
-#define _ORG_EXPATH_WWW_NS_ZIP2_H_
+#ifndef _ORG_EXPATH_WWW_NS_ARCHIVE_H_
+#define _ORG_EXPATH_WWW_NS_ARCHIVE_H_
 
 #include <map>
 
@@ -8,14 +8,14 @@
 #include <zorba/function.h>
 #include <zorba/dynamic_context.h>
 
-#define ZIP_MODULE_NAMESPACE "http://www.expath.org/ns/zip"
+#define ARCHIVE_MODULE_NAMESPACE "http://www.expath.org/ns/archive"
 
 #define MAX_BUF 65536
 #define MAX_PATH_LENGTH 512
 
-namespace zorba { namespace zip {
+namespace zorba { namespace archive {
 
-  class ZipModule : public ExternalModule {
+  class ArchiveModule : public ExternalModule {
     protected:
       class ltstr
       {
@@ -32,10 +32,10 @@ namespace zorba { namespace zip {
 
     public:
 
-      virtual ~ZipModule();
+      virtual ~ArchiveModule();
 
       virtual zorba::String
-        getURI() const { return ZIP_MODULE_NAMESPACE; }
+        getURI() const { return ARCHIVE_MODULE_NAMESPACE; }
 
       virtual zorba::ExternalFunction*
         getExternalFunction(const String& localName);
@@ -50,10 +50,10 @@ namespace zorba { namespace zip {
 
   };
 
-  class ZipFunction : public ContextualExternalFunction
+  class ArchiveFunction : public ContextualExternalFunction
   {
     protected:
-      class ZipEntry
+      class ArchiveEntry
       {
       private:
         int compressionLevel;
@@ -63,12 +63,12 @@ namespace zorba { namespace zip {
         String entryPath;
 
       public:
-        ZipEntry(String entry)
+        ArchiveEntry(String entry)
         {
           entryPath = entry;
           deleteEntry = false;
         }
-        ~ZipEntry(){}
+        ~ArchiveEntry(){}
 
         void setCompressionLevel(int level)
         {
@@ -108,7 +108,7 @@ namespace zorba { namespace zip {
         }
       };
 
-      class ZipEntries
+      class ArchiveEntries
       {
       private:
         int compressionLevel;
@@ -116,12 +116,12 @@ namespace zorba { namespace zip {
         int uncompressedSize;
         bool encrypted;
         //lastmodified check time unix
-        std::vector<ZipEntry> entryList;
+        std::vector<ArchiveEntry> entryList;
 
       public:
 
-        ZipEntries(){ encrypted = false; }
-        ~ZipEntries(){}
+        ArchiveEntries(){ encrypted = false; }
+        ~ArchiveEntries(){}
 
         void setCompressionLevel(int level)
         {
@@ -155,7 +155,7 @@ namespace zorba { namespace zip {
         {
           return encrypted;
         }
-        void insertEntry(ZipEntry aEntry)
+        void insertEntry(ArchiveEntry aEntry)
         {
           entryList.push_back(aEntry);
         }
@@ -163,27 +163,27 @@ namespace zorba { namespace zip {
 
       };
 
-      const ZipModule* theModule;
+      const ArchiveModule* theModule;
 
       static void 
-        processEntries(zorba::Item entries_node, ZipEntries& entries);
+        processEntries(zorba::Item entries_node, ArchiveEntries& entries);
 
       static void
         throwError(const char*, const std::string);
 
     public:
 
-      ZipFunction(const ZipModule* module);
+      ArchiveFunction(const ArchiveModule* module);
 
-      virtual ~ZipFunction();
+      virtual ~ArchiveFunction();
 
       virtual String
         getURI() const;
   };
 
-  class CreateFunction : public ZipFunction{
+  class CreateFunction : public ArchiveFunction{
     public:
-      CreateFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
+      CreateFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
       virtual ~CreateFunction(){}
 
@@ -196,13 +196,13 @@ namespace zorba { namespace zip {
                  const zorba::DynamicContext*) const;
   };
 
-  class EntriesFunction : public ZipFunction{
+  class EntriesFunction : public ArchiveFunction{
     private:
       static void 
-        list_archive(const char *zippath, ZipEntries& entries);
+        list_archive(const char *archivepath, ArchiveEntries& entries);
 
     public:
-      EntriesFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
+      EntriesFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
       virtual ~EntriesFunction(){}
 
@@ -215,14 +215,14 @@ namespace zorba { namespace zip {
                  const zorba::DynamicContext*) const;
   };
 
-  class GetTextFunction : public ZipFunction{
+  class ExtractTextFunction : public ArchiveFunction{
     public:
-      GetTextFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
+      ExtractTextFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
-      virtual ~GetTextFunction(){}
+      virtual ~ExtractTextFunction(){}
 
       virtual zorba::String
-        getLocalName() const { return "get-text"; }
+        getLocalName() const { return "extract-text"; }
 
       virtual zorba::ItemSequence_t
         evaluate(const Arguments_t&,
@@ -230,14 +230,14 @@ namespace zorba { namespace zip {
                  const zorba::DynamicContext*) const;
   };
 
-  class GetBinaryFunction : public ZipFunction{
+  class ExtractBinaryFunction : public ArchiveFunction{
     public:
-      GetBinaryFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
+      ExtractBinaryFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
-      virtual ~GetBinaryFunction(){}
+      virtual ~ExtractBinaryFunction(){}
 
       virtual zorba::String
-        getLocalName() const { return "get-binary"; }
+        getLocalName() const { return "extract-binary"; }
 
       virtual zorba::ItemSequence_t
         evaluate(const Arguments_t&,
@@ -245,9 +245,9 @@ namespace zorba { namespace zip {
                  const zorba::DynamicContext*) const;
   };
 
-  class UpdateFunction : public ZipFunction{
+  class UpdateFunction : public ArchiveFunction{
     public:
-      UpdateFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
+      UpdateFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
       virtual ~UpdateFunction(){}
 
@@ -259,40 +259,9 @@ namespace zorba { namespace zip {
                  const zorba::StaticContext*,
                  const zorba::DynamicContext*) const;
   };
-
-  class AddFunction : public ZipFunction{
+  class DeleteFunction : public ArchiveFunction{
     public:
-      AddFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
-
-      virtual ~AddFunction(){}
-
-      virtual zorba::String
-        getLocalName() const { return "add"; }
-
-      virtual zorba::ItemSequence_t
-        evaluate(const Arguments_t&,
-                 const zorba::StaticContext*,
-                 const zorba::DynamicContext*) const;
-  };
-
-  class ReplaceFunction : public ZipFunction{
-    public:
-      ReplaceFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
-
-      virtual ~ReplaceFunction(){}
-
-      virtual zorba::String
-        getLocalName() const { return "replace"; }
-
-      virtual zorba::ItemSequence_t
-        evaluate(const Arguments_t&,
-                 const zorba::StaticContext*,
-                 const zorba::DynamicContext*) const;
-  };
-
-  class DeleteFunction : public ZipFunction{
-    public:
-      DeleteFunction(const ZipModule* aModule) : ZipFunction(aModule) {}
+      DeleteFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
       virtual ~DeleteFunction(){}
 
@@ -305,6 +274,6 @@ namespace zorba { namespace zip {
                  const zorba::DynamicContext*) const;
   };
 
-} /* namespace zip  */ } /* namespace zorba */
+} /* namespace archive  */ } /* namespace zorba */
 
-#endif // _ORG_EXPATH_WWW_NS_ZIP2_H_
+#endif // _ORG_EXPATH_WWW_NS_ARCHIVE_H_

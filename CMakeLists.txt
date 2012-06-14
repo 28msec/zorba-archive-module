@@ -14,7 +14,7 @@
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
-PROJECT (zorba_zip_module)
+PROJECT (zorba_archive_module)
 ENABLE_TESTING ()
 INCLUDE (CTest)
 

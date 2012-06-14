@@ -17,16 +17,16 @@
 
 #include <MMSystem.h>
 
-#include "zip.h"
+#include "archive_module.h"
 
-namespace zorba { namespace zip {
+namespace zorba { namespace archive {
 
 
 /*******************************************************************************************
  *******************************************************************************************/
 
   zorba::ExternalFunction*
-    ZipModule::getExternalFunction(const zorba::String& localName)
+    ArchiveModule::getExternalFunction(const zorba::String& localName)
   {
     FuncMap_t::iterator lIte = theFunctions.find(localName);
 
@@ -42,21 +42,13 @@ namespace zorba { namespace zip {
       {
         lFunc = new EntriesFunction(this);
       }
-      else if (localName == "get-text")
+      else if (localName == "extract-text")
       {
-        lFunc = new GetTextFunction(this);
+        lFunc = new ExtractTextFunction(this);
       }
-      else if (localName == "get-binary")
+      else if (localName == "extract-binary")
       {
-        lFunc = new GetBinaryFunction(this);
-      }
-      else if (localName == "add")
-      {
-        lFunc = new AddFunction(this);
-      }
-      else if (localName == "replace")
-      {
-        lFunc = new ReplaceFunction(this);
+        lFunc = new ExtractBinaryFunction(this);
       }
       else if (localName == "delete")
       {
@@ -71,12 +63,12 @@ namespace zorba { namespace zip {
     return lFunc;
   }
 
-  void ZipModule::destroy()
+  void ArchiveModule::destroy()
   {
     delete this;
   }
 
-  ZipModule::~ZipModule()
+  ArchiveModule::~ArchiveModule()
   {
     for (FuncMap_t::const_iterator lIter = theFunctions.begin();
       lIter != theFunctions.end(); ++lIter)
@@ -89,23 +81,23 @@ namespace zorba { namespace zip {
 /*******************************************************************************************
  *******************************************************************************************/
   
-  ZipFunction::ZipFunction(const ZipModule* aModule)
+  ArchiveFunction::ArchiveFunction(const ArchiveModule* aModule)
     : theModule(aModule)
   {
   }
 
-  ZipFunction::~ZipFunction()
+  ArchiveFunction::~ArchiveFunction()
   {
   }
 
   String 
-    ZipFunction::getURI() const
+    ArchiveFunction::getURI() const
   {
     return theModule->getURI();
   }
 
   void 
-    ZipFunction::processEntries(Item entries_node, ZipEntries& entries)
+    ArchiveFunction::processEntries(Item entries_node, ArchiveEntries& entries)
   {
     if (!entries_node.isNull())
     {
@@ -162,7 +154,7 @@ namespace zorba { namespace zip {
         std::string local_name = child_name.getLocalName().c_str();
         if (child_name.getLocalName() == "entry")
         {
-          ZipEntry entry(child.getStringValue());
+          ArchiveEntry entry(child.getStringValue());
 
           Item attr;
           Iterator_t attr_iter = child.getAttributes();
@@ -195,28 +187,28 @@ namespace zorba { namespace zip {
   }
 
   void
-    ZipFunction::throwError(const char *err_localname, const std::string aErrorMessage)
+    ArchiveFunction::throwError(const char *err_localname, const std::string aErrorMessage)
   {
-    String errNS(ZIP_MODULE_NAMESPACE);
+    String errNS(ARCHIVE_MODULE_NAMESPACE);
     String errName(err_localname);
-    Item errQName = ZipModule::getItemFactory()->createQName(errNS, errName);
+    Item errQName = ArchiveModule::getItemFactory()->createQName(errNS, errName);
     String errDescription(aErrorMessage);
     throw USER_EXCEPTION(errQName, errDescription);
   }
 
   Item
-    ZipFunction::ZipEntries::getTree()
+    ArchiveFunction::ArchiveEntries::getTree()
   {
-    ItemFactory* factory = ZipModule::getItemFactory();
-    Item doc = factory->createDocumentNode(ZIP_MODULE_NAMESPACE,"");
+    ItemFactory* factory = ArchiveModule::getItemFactory();
+    Item doc = factory->createDocumentNode(ARCHIVE_MODULE_NAMESPACE,"");
 
     Item nodeName = factory->createQName("", "entries");
     Item untypedNodeName = factory->createQName("http://www.w3.org/2001/XMLSchema", "untyped");
 
     Item root = factory->createElementNode(doc, nodeName, untypedNodeName, true, false, NsBindings());
     
-    std::vector<ZipFunction::ZipEntry>::iterator lIter = entryList.begin();
-    std::vector<ZipFunction::ZipEntry>::iterator lEnd = entryList.end();
+    std::vector<ArchiveFunction::ArchiveEntry>::iterator lIter = entryList.begin();
+    std::vector<ArchiveFunction::ArchiveEntry>::iterator lEnd = entryList.end();
 
     for (; lIter != lEnd; ++lIter)
     {
@@ -250,9 +242,9 @@ namespace zorba { namespace zip {
     arg0_iter->next(entries_item);
     arg0_iter->close();
 
-    ZipEntries entries;
+    ArchiveEntries entries;
 
-    ZipFunction::processEntries(entries_item, entries);
+    ArchiveFunction::processEntries(entries_item, entries);
 
     throwError("ImplementationError", "Function not yet Implemented");
 
@@ -278,7 +270,7 @@ namespace zorba { namespace zip {
 #else
   ssize_t
 #endif    
-    readZip(struct archive *a, void *client_data, const void **buff)
+    readArchive(struct archive *a, void *client_data, const void **buff)
   {
     size_t bytes_read;
     struct datastr *data = (struct datastr *)client_data;
@@ -288,7 +280,7 @@ namespace zorba { namespace zip {
   }
 
   int
-    closeZip(struct archive *a, void *client_data)
+    closeArchive(struct archive *a, void *client_data)
   {
     struct datastr* data = (struct datastr *)client_data;
     if (data->f != NULL)
@@ -306,7 +298,7 @@ namespace zorba { namespace zip {
   }
 
   void
-    EntriesFunction::list_archive(const char *zippath, ZipEntries& entries)
+    EntriesFunction::list_archive(const char *archivepath, ArchiveEntries& entries)
   {
     struct datastr *data;
     struct archive *a;
@@ -317,7 +309,7 @@ namespace zorba { namespace zip {
     data = (datastr *)malloc(sizeof(datastr));
     data->size = MAX_BUF;
     data->buff = malloc(data->size);
-    strcpy(data->name, zippath);
+    strcpy(data->name, archivepath);
     data->f = fopen(data->name, "rb");
     
     if (data->f == NULL)
@@ -326,7 +318,7 @@ namespace zorba { namespace zip {
     a = archive_read_new();
 	  archive_read_support_compression_all(a);
 	  archive_read_support_format_all(a);
-	  r = archive_read_open(a, data, NULL, readZip, closeZip);
+	  r = archive_read_open(a, data, NULL, readArchive, closeArchive);
 
     if (r != ARCHIVE_OK)
       throwError("FileError", "Error opening file");
@@ -335,7 +327,7 @@ namespace zorba { namespace zip {
     {
       char * s = new char[MAX_PATH_LENGTH];
       sprintf(s, archive_entry_pathname(entry));
-      ZipEntry zEntry(s);
+      ArchiveEntry zEntry(s);
       zEntry.setUncompressedSize(archive_entry_size(entry));
       archive_read_data_skip(a);
       entries.insertEntry(zEntry);
@@ -359,7 +351,7 @@ namespace zorba { namespace zip {
     args_iter->next(lItem);
     args_iter->close();
 
-    ZipEntries entries;
+    ArchiveEntries entries;
     list_archive(lItem.getStringValue().c_str(), entries);
 
     Item lTree = entries.getTree();
@@ -371,7 +363,7 @@ namespace zorba { namespace zip {
  *******************************************************************************************/
  
   zorba::ItemSequence_t
-    GetTextFunction::evaluate(
+    ExtractTextFunction::evaluate(
       const Arguments_t& aArgs,
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
@@ -385,7 +377,7 @@ namespace zorba { namespace zip {
  *******************************************************************************************/
  
   zorba::ItemSequence_t
-    GetBinaryFunction::evaluate(
+    ExtractBinaryFunction::evaluate(
       const Arguments_t& aArgs,
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
@@ -411,35 +403,6 @@ namespace zorba { namespace zip {
 
 /*******************************************************************************************
  *******************************************************************************************/
- 
-  zorba::ItemSequence_t
-    AddFunction::evaluate(
-      const Arguments_t& aArgs,
-      const zorba::StaticContext* aSctx,
-      const zorba::DynamicContext* aDctx) const 
-  {
-    throwError("ImplementationError", "Function not yet Implemented");
-
-    return ItemSequence_t(new EmptySequence());
-  }
-
-/*******************************************************************************************
- *******************************************************************************************/
- 
-  zorba::ItemSequence_t
-    ReplaceFunction::evaluate(
-      const Arguments_t& aArgs,
-      const zorba::StaticContext* aSctx,
-      const zorba::DynamicContext* aDctx) const 
-  {
-    throwError("ImplementationError", "Function not yet Implemented");
-
-    return ItemSequence_t(new EmptySequence());
-  }
-
-/*******************************************************************************************
- *******************************************************************************************/
- 
   zorba::ItemSequence_t
     DeleteFunction::evaluate(
       const Arguments_t& aArgs,
@@ -451,7 +414,7 @@ namespace zorba { namespace zip {
     return ItemSequence_t(new EmptySequence());
   }
 
-} /* namespace zorba */ } /* namespace zip*/
+} /* namespace zorba */ } /* namespace archive*/
 
 #ifdef WIN32
 #  define DLL_EXPORT __declspec(dllexport)
@@ -460,5 +423,5 @@ namespace zorba { namespace zip {
 #endif
 
 extern "C" DLL_EXPORT zorba::ExternalModule* createModule() {
-  return new zorba::zip::ZipModule();
+  return new zorba::archive::ArchiveModule();
 }
