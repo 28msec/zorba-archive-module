@@ -255,110 +255,124 @@ namespace zorba { namespace archive {
 
 /*******************************************************************************************
  *******************************************************************************************/
-  struct datastr
-  {
-    char name[MAX_PATH_LENGTH];
-    void *buff;
-    FILE *f;
-  #ifdef WIN32
-    long size;
-  #else
-    ssize_t size;
-  #endif
-  };
-
 #ifdef WIN32
   long
 #else
   ssize_t
 #endif    
-    readArchive(struct archive *a, void *client_data, const void **buff)
+  ArchiveFunction::readStream(struct archive *, void *func, const void **buff)
   {
-    size_t bytes_read;
-    struct datastr *data = (struct datastr *)client_data;
-    *buff = data->buff;
-    bytes_read = fread(data->buff, 1, data->size, data->f);
-    return bytes_read;
+    // TODO make this more general to work with arbitrary item sequences
+    // create a struct containing the user data
+    EntriesFunction::EntriesItemSequence::EntriesIterator* lFunc =
+      reinterpret_cast<EntriesFunction::EntriesItemSequence::EntriesIterator*>(func);
+
+    std::istream* lStream = lFunc->getStream();
+
+    lStream->read(lFunc->getBuffer(), 1024);
+    *buff = lFunc->getBuffer();
+    return lStream->gcount();
   }
 
-  int
-    closeArchive(struct archive *a, void *client_data)
-  {
-    struct datastr* data = (struct datastr *)client_data;
-    if (data->f != NULL)
-    {
-      fclose(data->f);
-      data->f = NULL;
-    }
-    if (data->buff != NULL)
-    {
-      free(data->buff);
-      data->buff = NULL;
-    }
+/*******************************************************************************************
+ *******************************************************************************************/
+  zorba::ItemSequence_t
+  EntriesFunction::evaluate(
+    const Arguments_t& aArgs,
+    const zorba::StaticContext* aSctx,
+    const zorba::DynamicContext* aDctx) const 
+  { 
+    // TODO factorize this code into a function in the base class
+    Item lArchive;
+    Iterator_t args_iter = aArgs[0]->getIterator();
+    args_iter->open();
+    args_iter->next(lArchive);
+    args_iter->close();
+    
+    return ItemSequence_t(new EntriesItemSequence(lArchive));
+  }
 
-    return ARCHIVE_OK;
+  EntriesFunction::EntriesItemSequence::EntriesIterator::EntriesIterator(
+      zorba::Item& aArchive)
+    : theArchiveItem(aArchive),
+      theArchive(0),
+      theStream(0),
+      theBuffer(0)
+  {
+    theFactory = Zorba::getInstance(0)->getItemFactory();
+    // TODO use module uri here
+    theEntryName = theFactory->createQName(
+        "http://www.expath.org/ns/archive", "entry");
+    
+    theUncompressedSizeName = theFactory->createQName("", "uncompressed-size");
   }
 
   void
-    EntriesFunction::list_archive(const char *archivepath, ArchiveEntries& entries)
+  EntriesFunction::EntriesItemSequence::EntriesIterator::open()
   {
-    struct datastr *data;
-    struct archive *a;
-    struct archive_entry *entry;
+    theStream = &theArchiveItem.getStream();
 
-    int r;
+    // TODO do decoding of base64binary here if necessary
+    // TODO handle non-streaming base64Binary here
 
-    data = (datastr *)malloc(sizeof(datastr));
-    data->size = MAX_BUF;
-    data->buff = malloc(data->size);
-    strcpy(data->name, archivepath);
-    data->f = fopen(data->name, "rb");
-    
-    if (data->f == NULL)
-      throwError("FileNotFound", "File was not found");
+    // TODO define constant and allocate on stack
+    theBuffer = new char[1024];
 
-    a = archive_read_new();
-	  archive_read_support_compression_all(a);
-	  archive_read_support_format_all(a);
-	  r = archive_read_open(a, data, NULL, readArchive, closeArchive);
-
-    if (r != ARCHIVE_OK)
-      throwError("FileError", "Error opening file");
-   
-    while (archive_read_next_header(a, &entry) == ARCHIVE_OK)
-    {
-      char * s = new char[MAX_PATH_LENGTH];
-      sprintf(s, archive_entry_pathname(entry));
-      ArchiveEntry zEntry(s);
-      zEntry.setUncompressedSize(archive_entry_size(entry));
-      archive_read_data_skip(a);
-      entries.insertEntry(zEntry);
-      delete s;
-    }
-    r = archive_read_finish(a);
-    if (r != ARCHIVE_OK)
-      throwError("FileError", "Error opening file");
-    free(data);
+    theArchive = archive_read_new();
+	  archive_read_support_compression_all(theArchive);
+	  archive_read_support_format_all(theArchive);
+	  archive_read_open(theArchive, this, 0, ArchiveFunction::readStream, 0);
   }
 
-  zorba::ItemSequence_t
-    EntriesFunction::evaluate(
-      const Arguments_t& aArgs,
-      const zorba::StaticContext* aSctx,
-      const zorba::DynamicContext* aDctx) const 
-  { 
-    Item lItem;
-    Iterator_t args_iter = aArgs[0]->getIterator();
-    args_iter->open();
-    args_iter->next(lItem);
-    args_iter->close();
+  bool
+  EntriesFunction::EntriesItemSequence::EntriesIterator::next(zorba::Item& i)
+  {
+    struct archive_entry *lEntry;
 
-    ArchiveEntries entries;
-    list_archive(lItem.getStringValue().c_str(), entries);
+    if (archive_read_next_header(theArchive, &lEntry) != ARCHIVE_OK)
+    {
+      return false;
+    }
 
-    Item lTree = entries.getTree();
-    
-    return ItemSequence_t(new SingletonItemSequence(lTree));
+    String lName = archive_entry_pathname(lEntry);
+    int lSize = archive_entry_size(lEntry);
+
+    // TODO create element according to schema here
+    Item lNoParent;
+    Item lType = theFactory->createQName("http://www.w3.org/2001/XMLSchema", "untyped");
+    i = theFactory->createElementNode(lNoParent, theEntryName, lType, true, false, NsBindings());
+
+    theFactory->createTextNode(i, lName);
+
+    Item lSizeItem = theFactory->createInteger(lSize);
+    lType = theFactory->createQName("http://www.w3.org/2001/XMLSchema", "untyped");
+    theFactory->createAttributeNode(i, theUncompressedSizeName, lType, lSizeItem);
+
+    archive_read_data_skip(theArchive);
+
+    return true;
+  }
+
+  void
+  EntriesFunction::EntriesItemSequence::EntriesIterator::close()
+  {
+    delete[] theBuffer;
+    theBuffer = 0;
+
+    archive_read_finish(theArchive);
+    theArchive = 0;
+  }
+
+  bool
+  EntriesFunction::EntriesItemSequence::EntriesIterator::isOpen() const
+  {
+    return theArchive != 0;
+  }
+
+  std::istream*
+  EntriesFunction::EntriesItemSequence::EntriesIterator::getStream() const
+  {
+    return theStream;
   }
 
 /*******************************************************************************************

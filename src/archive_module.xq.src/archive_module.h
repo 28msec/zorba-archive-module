@@ -171,6 +171,16 @@ namespace zorba { namespace archive {
       static void
         throwError(const char*, const std::string);
 
+#ifdef WIN32
+      static long
+#else
+      static ssize_t
+#endif    
+      readStream(struct archive *a, void *client_data, const void **buff);
+
+      static int
+      closeStream(struct archive *a, void *client_data);
+
     public:
 
       ArchiveFunction(const ArchiveModule* module);
@@ -196,10 +206,65 @@ namespace zorba { namespace archive {
                  const zorba::DynamicContext*) const;
   };
 
-  class EntriesFunction : public ArchiveFunction{
+  class EntriesFunction : public ArchiveFunction
+  {
+    public:
+      class EntriesItemSequence : public ItemSequence
+      {
+        public:
+          class EntriesIterator : public Iterator
+          {
+            protected:
+              zorba::Item theArchiveItem;
+
+              struct archive* theArchive;
+
+              std::istream* theStream;
+
+              char* theBuffer;
+
+              zorba::Item theEntryName;
+              zorba::Item theUncompressedSizeName;
+
+              zorba::ItemFactory* theFactory;
+
+            public:
+              EntriesIterator(zorba::Item& aArchive);
+
+              void
+              open();
+
+              bool
+              next(zorba::Item& aItem);
+
+              void
+              close();
+
+              bool
+              isOpen() const;
+
+              std::istream*
+              getStream() const;
+
+              char*
+              getBuffer() const { return theBuffer; }
+          };
+
+        protected:
+          zorba::Item theArchive;
+
+        public:
+          EntriesItemSequence(zorba::Item& aArchive)
+            : theArchive(aArchive)
+          {}
+
+          zorba::Iterator_t
+          getIterator() { return new EntriesIterator(theArchive); }
+      };
+      
     private:
       static void 
-        list_archive(const char *archivepath, ArchiveEntries& entries);
+      list_archive(const char *archivepath, ArchiveEntries& entries);
 
     public:
       EntriesFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
@@ -207,12 +272,12 @@ namespace zorba { namespace archive {
       virtual ~EntriesFunction(){}
 
       virtual zorba::String
-        getLocalName() const { return "entries"; }
+      getLocalName() const { return "entries"; }
 
       virtual zorba::ItemSequence_t
-        evaluate(const Arguments_t&,
-                 const zorba::StaticContext*,
-                 const zorba::DynamicContext*) const;
+      evaluate(const Arguments_t&,
+               const zorba::StaticContext*,
+               const zorba::DynamicContext*) const;
   };
 
   class ExtractTextFunction : public ArchiveFunction{
