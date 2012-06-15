@@ -25,9 +25,8 @@
 namespace zorba { namespace archive {
 
 
-/*******************************************************************************************
- *******************************************************************************************/
-
+/*******************************************************************************
+ ******************************************************************************/
   zorba::ExternalFunction*
     ArchiveModule::getExternalFunction(const zorba::String& localName)
   {
@@ -106,9 +105,8 @@ namespace zorba { namespace archive {
     return lModifiedItem;
   }
 
-/*******************************************************************************************
- *******************************************************************************************/
-  
+/*******************************************************************************
+ ******************************************************************************/
   ArchiveFunction::ArchiveFunction(const ArchiveModule* aModule)
     : theModule(aModule)
   {
@@ -242,12 +240,8 @@ namespace zorba { namespace archive {
         throwError(aLocalName, archive_error_string(a));
       }
     }
-
   }
 
-
-/*******************************************************************************
- ******************************************************************************/
   zorba::Item
   ArchiveFunction::getOneItem(const Arguments_t& aArgs, int aIndex)
   {
@@ -265,9 +259,10 @@ namespace zorba { namespace archive {
 #else
   ssize_t
 #endif    
-  ArchiveFunction::readStream(struct archive*, void *data, const void **buff)
+  ArchiveItemSequence::readStream(struct archive*, void *data, const void **buff)
   {
-    CallbackData* lData = reinterpret_cast<CallbackData*>(data);
+    ArchiveItemSequence::CallbackData* lData =
+      reinterpret_cast<ArchiveItemSequence::CallbackData*>(data);
 
     std::istream* lStream = lData->theStream;
 
@@ -277,6 +272,58 @@ namespace zorba { namespace archive {
     return lStream->gcount(); 
   }
 
+  ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
+    : theArchiveItem(a),
+      theArchive(0),
+      theFactory(Zorba::getInstance(0)->getItemFactory())
+  {}
+
+  void
+  ArchiveItemSequence::ArchiveIterator::open()
+  {
+    // open archive and allow for all kinds of formats and compression algos
+    theArchive = archive_read_new();
+
+    if (!theArchive)
+      ArchiveFunction::throwError(
+          "ARCH9999", "internal error (couldn't create archive)");
+
+	  int lErr = archive_read_support_compression_all(theArchive);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
+
+	  archive_read_support_format_all(theArchive);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
+
+    if (theArchiveItem.isStreamable())
+    {
+      theData.theStream = &theArchiveItem.getStream();
+
+      // TODO do decoding of base64binary here if necessary
+      assert(!theArchiveItem.isEncoded());
+
+	    lErr = archive_read_open(
+          theArchive, &theData, 0, ArchiveItemSequence::readStream, 0);
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
+    }
+    else
+    {
+      size_t lLen = 0;
+      char* lData = const_cast<char*>(theArchiveItem.getBase64BinaryValue(lLen));
+      // TODO do decoding of base64binary here if necessary
+      assert(!theArchiveItem.isEncoded());
+
+      lErr = archive_read_open_memory(theArchive, lData, lLen);
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
+    }
+  }
+
+  void
+  ArchiveItemSequence::ArchiveIterator::close()
+  {
+    int lErr = archive_read_finish(theArchive);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
+    theArchive = 0;
+  }
 
 /*******************************************************************************
  ******************************************************************************/
@@ -317,9 +364,7 @@ namespace zorba { namespace archive {
 
   EntriesFunction::EntriesItemSequence::EntriesIterator::EntriesIterator(
       zorba::Item& aArchive)
-    : theArchiveItem(aArchive),
-      theArchive(0),
-      theFactory(ArchiveModule::getItemFactory())
+    : ArchiveIterator(aArchive)
   {
     theUntypedQName = theFactory->createQName(
         "http://www.w3.org/2001/XMLSchema", "untyped");
@@ -329,43 +374,6 @@ namespace zorba { namespace archive {
 
     theLastModifiedName = theFactory->createQName("", "last-modified");
     theUncompressedSizeName = theFactory->createQName("", "size");
-  }
-
-  void
-  EntriesFunction::EntriesItemSequence::EntriesIterator::open()
-  {
-    // open archive and allow for all kinds of formats and compression algos
-    theArchive = archive_read_new();
-    if (!theArchive)
-      throwError("ARCH9999", "internal error (couldn't create archive)");
-
-	  int lErr = archive_read_support_compression_all(theArchive);
-    checkForError(lErr, 0, theArchive);
-
-	  archive_read_support_format_all(theArchive);
-    checkForError(lErr, 0, theArchive);
-
-    if (theArchiveItem.isStreamable())
-    {
-      theData.theStream = &theArchiveItem.getStream();
-
-      // TODO do decoding of base64binary here if necessary
-      assert(!theArchiveItem.isEncoded());
-
-	    lErr = archive_read_open(
-          theArchive, &theData, 0, ArchiveFunction::readStream, 0);
-      checkForError(lErr, 0, theArchive);
-    }
-    else
-    {
-      size_t lLen = 0;
-      char* lData = const_cast<char*>(theArchiveItem.getBase64BinaryValue(lLen));
-      // TODO do decoding of base64binary here if necessary
-      assert(!theArchiveItem.isEncoded());
-
-      lErr = archive_read_open_memory(theArchive, lData, lLen);
-      checkForError(lErr, 0, theArchive);
-    }
   }
 
   bool
@@ -423,33 +431,65 @@ namespace zorba { namespace archive {
     return true;
   }
 
-  void
-  EntriesFunction::EntriesItemSequence::EntriesIterator::close()
-  {
-    int lErr = archive_read_finish(theArchive);
-    ArchiveFunction::checkForError(lErr, 0, theArchive);
-    theArchive = 0;
-  }
-
-  bool
-  EntriesFunction::EntriesItemSequence::EntriesIterator::isOpen() const
-  {
-    return theArchive != 0;
-  }
-
-
 /*******************************************************************************************
  *******************************************************************************************/
  
   zorba::ItemSequence_t
-    ExtractTextFunction::evaluate(
-      const Arguments_t& aArgs,
-      const zorba::StaticContext* aSctx,
-      const zorba::DynamicContext* aDctx) const 
-  {
-    throwError("ImplementationError", "Function not yet Implemented");
+  ExtractTextFunction::evaluate(
+    const Arguments_t& aArgs,
+    const zorba::StaticContext* aSctx,
+    const zorba::DynamicContext* aDctx) const 
+  { 
+    Item lArchive = getOneItem(aArgs, 0);
+    
+    return ItemSequence_t(new ExtractItemSequence(lArchive));
+  }
 
-    return ItemSequence_t(new EmptySequence());
+  ExtractTextFunction::ExtractItemSequence::ExtractIterator::ExtractIterator(
+      zorba::Item& aArchive)
+    : ArchiveIterator(aArchive)
+  {
+  }
+
+  bool
+  ExtractTextFunction::ExtractItemSequence::ExtractIterator::next(zorba::Item& aRes)
+  {
+    struct archive_entry *lEntry;
+
+    int lErr = archive_read_next_header(theArchive, &lEntry);
+    
+    if (lErr == ARCHIVE_EOF) return false;
+
+    if (lErr != ARCHIVE_OK)
+    {
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
+    }
+
+    String lResult;
+
+    // reserve some space if we know the decompressed size
+    if (archive_entry_size_is_set(lEntry))
+    {
+      long long lSize = archive_entry_size(lEntry);
+      lResult.reserve(lSize);
+    }
+
+    char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+
+    // read entire entry into a string
+    while (true)
+    {
+      size_t s = archive_read_data(
+          theArchive, &lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+
+      if (s == 0) break;
+
+      lResult.append(lBuf, s);
+    }
+
+    aRes = theFactory->createString(lResult);
+
+    return true;
   }
 
 /*******************************************************************************************
