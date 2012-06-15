@@ -8,10 +8,7 @@
 #include <zorba/function.h>
 #include <zorba/dynamic_context.h>
 
-#define ARCHIVE_MODULE_NAMESPACE "http://www.expath.org/ns/archive"
-
-#define MAX_BUF 65536
-#define MAX_PATH_LENGTH 512
+#define ZORBA_ARCHIVE_MAX_READ_BUF 2048
 
 namespace zorba { namespace archive {
 
@@ -35,7 +32,7 @@ namespace zorba { namespace archive {
       virtual ~ArchiveModule();
 
       virtual zorba::String
-        getURI() const { return ARCHIVE_MODULE_NAMESPACE; }
+        getURI() const { return getModuleURI(); }
 
       virtual zorba::ExternalFunction*
         getExternalFunction(const String& localName);
@@ -48,10 +45,19 @@ namespace zorba { namespace archive {
         return Zorba::getInstance(0)->getItemFactory();
       }
 
+      static zorba::String
+      getModuleURI() { return "http://www.expath.org/ns/archive"; }
+
+      static zorba::Item
+      createDateTimeItem(time_t&);
+
   };
 
   class ArchiveFunction : public ContextualExternalFunction
   {
+    protected:
+      const ArchiveModule* theModule;
+
     protected:
       class ArchiveEntry
       {
@@ -163,13 +169,24 @@ namespace zorba { namespace archive {
 
       };
 
-      const ArchiveModule* theModule;
-
       static void 
         processEntries(zorba::Item entries_node, ArchiveEntries& entries);
 
       static void
-        throwError(const char*, const std::string);
+        throwError(const char*, const char*);
+
+      static void
+        checkForError(int aErrNo, const char* aLocalName, struct archive *a);
+
+    protected:
+      struct CallbackData
+      {
+        std::istream* theStream;
+        char          theBuffer[ZORBA_ARCHIVE_MAX_READ_BUF];
+      };
+
+      static zorba::Item
+      getOneItem(const Arguments_t& aArgs, int aIndex);
 
 #ifdef WIN32
       static long
@@ -177,9 +194,6 @@ namespace zorba { namespace archive {
       static ssize_t
 #endif    
       readStream(struct archive *a, void *client_data, const void **buff);
-
-      static int
-      closeStream(struct archive *a, void *client_data);
 
     public:
 
@@ -219,12 +233,12 @@ namespace zorba { namespace archive {
 
               struct archive* theArchive;
 
-              std::istream* theStream;
+              CallbackData    theData;
 
-              char* theBuffer;
-
+              zorba::Item theUntypedQName;
               zorba::Item theEntryName;
               zorba::Item theUncompressedSizeName;
+              zorba::Item theLastModifiedName;
 
               zorba::ItemFactory* theFactory;
 
@@ -242,12 +256,6 @@ namespace zorba { namespace archive {
 
               bool
               isOpen() const;
-
-              std::istream*
-              getStream() const;
-
-              char*
-              getBuffer() const { return theBuffer; }
           };
 
         protected:
@@ -262,10 +270,6 @@ namespace zorba { namespace archive {
           getIterator() { return new EntriesIterator(theArchive); }
       };
       
-    private:
-      static void 
-      list_archive(const char *archivepath, ArchiveEntries& entries);
-
     public:
       EntriesFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 

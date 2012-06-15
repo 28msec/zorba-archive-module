@@ -1,0 +1,124 @@
+<?xml version="1.0"?>
+ 
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  targetNamespace="http://www.expath.org/ns/archive"
+  xmlns="http://www.expath.org/ns/archive"
+  elementFormDefault="qualified"
+  attributeFormDefault="unqualified">
+ 
+  <!-- archive simple types -->
+  <xs:simpleType name="compression-algorithm-string-type">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="stored"/>
+      <xs:enumeration value="deflate"/>
+      <xs:enumeration value="bzip2"/>
+      <xs:enumeration value="lzma"/>
+    </xs:restriction>
+  </xs:simpleType>
+ 
+  <xs:simpleType name="compression-integer-type">
+    <xs:restriction base="xs:integer">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="9"/>
+    </xs:restriction>
+  </xs:simpleType>
+ 
+  <xs:simpleType name="archive-format-string-type">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="zip"/>
+      <xs:enumeration value="tar"/>
+      <xs:enumeration value="pax"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- entry simple types -->
+  <xs:simpleType name="entry-name-type">
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="entry-datetime-type">
+    <xs:restriction base="xs:dateTime"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="entry-size-type">
+    <xs:restriction base="xs:integer"/>
+  </xs:simpleType>
+ 
+  <!-- base type -->
+  <xs:complexType name="base-param-type">
+    <xs:complexContent>
+      <xs:restriction base="xs:anyType">
+        <xs:anyAttribute namespace="##other" processContents="lax"/>
+      </xs:restriction>
+    </xs:complexContent>
+  </xs:complexType>
+ 
+  <xs:element name="archive-option-element"
+    abstract="true" type="base-param-type"/>
+ 
+  <!-- compression algorithm -->
+  <xs:complexType name="compression-algorithm-type">
+    <xs:complexContent>
+      <xs:extension base="base-param-type">
+        <xs:attribute name="value" type="compression-algorithm-string-type"
+              use="required"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+ 
+  <xs:element id="algorithm" name="algorithm" type="compression-algorithm-type"
+        substitutionGroup="archive-option-element"/>
+ 
+  <!-- compression level -->
+  <xs:complexType name="compression-type">
+    <xs:complexContent>
+      <xs:extension base="base-param-type">
+        <xs:attribute name="value" type="compression-integer-type"
+              use="required"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+ 
+  <xs:element id="compression" name="compression" type="compression-type"
+        substitutionGroup="archive-option-element"/>
+ 
+  <!-- archive format -->
+  <xs:complexType name="archive-format-type">
+    <xs:complexContent>
+      <xs:extension base="base-param-type">
+        <xs:attribute name="value" type="archive-format-string-type"
+              use="required"/>
+      </xs:extension>
+    </xs:complexContent>
+  </xs:complexType>
+ 
+  <xs:element id="format" name="format" type="archive-format-type"
+        substitutionGroup="archive-option-element"/>
+ 
+  <!-- options element -->
+  <xs:element name="options">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="archive-option-element"
+              minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- entry element -->
+  <xs:element name="entry">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="entry-name-type">
+          <xs:attributeGroup ref="entry-attributes"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+ 
+  <xs:attributeGroup name="entry-attributes">
+    <xs:attribute name="size" type="entry-size-type"/>
+    <xs:attribute name="last-modified" type="entry-datetime-type"/>
+  </xs:attributeGroup>
+
+</xs:schema>

@@ -1,6 +1,6 @@
 module namespace a = "http://www.expath.org/ns/archive";
  
-(:import schema namespace options = "http://www.expath.org/ns/archive";:)
+import schema namespace options = "http://www.expath.org/ns/archive";
 
 declare namespace ver = "http://www.zorba-xquery.com/options/versioning";
 declare option ver:module-version "1.0";
@@ -45,20 +45,15 @@ declare function a:create(
     as xs:base64Binary external; 
   
 (:~
- : Return the specification of the given archive.
+ : Returns the header information of all entries in the given archive.
  :
- : Example:
- : <a:entry last-modified="2009-03-20T03:30:32" compressed-size="232" uncompressed-size"324" encrypted="false">
- :   myfile.txt
- : </a:entry>
- : <a:entry>
- :   dir/myfile.xml
- : </a:entry>
- : <a:entry>
- :   dir/dir2/image.png
- : </a:entry>
+ : <p>Such information includes the name of the entry, the uncompressed size,
+ : as well as the last-modified timestamp. Note that not all values are
+ : available in every archive.</p>
  :
- : @return specification
+ : @return a sequence of entry elements, one for each entry in the archive
+ :
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
  :)
 declare function a:entries($archive as xs:base64Binary)
     as element(a:entry)* external;
