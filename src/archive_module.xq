@@ -65,7 +65,7 @@ declare function a:entries($archive as xs:base64Binary)
  : @return one string for the contents of each entry in the archive
  :
  : @error a:ARCH9999 if $archive is not an archive or corrupted
- : @error if any of the entries contains invalid utf-8 characters
+ : @error err:FOCH0001 if any of the entries contains invalid utf-8 characters
  :)
 declare function a:extract-text($archive as xs:base64Binary)
     as xs:string* external;
@@ -78,7 +78,7 @@ declare function a:extract-text($archive as xs:base64Binary)
  : @return strings
  :
  : @error a:ARCH9999 if $archive is not an archive or corrupted
- : @error if the file contains invalid utf-8 characters
+ : @error err:FOCH0001 if any of the entries requested contains invalid utf-8 characters
  :)
 declare function a:extract-text($archive as xs:base64Binary, $entry-names as xs:string*)
     as xs:string* external;
@@ -91,8 +91,7 @@ declare function a:extract-text($archive as xs:base64Binary, $entry-names as xs:
  :
  : @error a:ARCH9999 if $archive is not an archive or corrupted
  : @error a:ARCH0004 if the given $encoding is invalid or not supported
- : @error if the file contains invalid characters
- : @error if a transcoding error happens
+ : @error err:FOCH0001 if a transcoding error happens
  :)
 declare function a:extract-text(
   $archive as xs:base64Binary,
@@ -105,8 +104,6 @@ declare function a:extract-text(
  : as base64Binary.
  :
  : @return base64Binary items
- :
- : @error if the file does not exist
  :)
 declare function a:extract-binary($archive as xs:base64Binary)
     as xs:base64Binary* external;
@@ -116,8 +113,6 @@ declare function a:extract-binary($archive as xs:base64Binary)
  : as base64Binary.
  :
  : @return base64Binary items
- :
- : @error if the file does not exist
  :)
 declare function a:extract-binary($archive as xs:base64Binary, $entry-names as xs:string*)
     as xs:base64Binary* external;
