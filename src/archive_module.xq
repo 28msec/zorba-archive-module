@@ -59,13 +59,13 @@ declare function a:entries($archive as xs:base64Binary)
     as element(a:entry)* external;
   
 (:~
- : Returns all entries from the archive as a string.
- : The default encoding used to read the string is UTF-8.
+ : Extracts the contents of all entries in the given archive as text
+ : using UTF-8 as default encoding.
  :
- : @return strings
+ : @return one string for the contents of each entry in the archive
  :
- : @error if the file contains invalid utf-8 characters
- : @error if the file doesn't exist
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
+ : @error if any of the entries contains invalid utf-8 characters
  :)
 declare function a:extract-text($archive as xs:base64Binary)
     as xs:string* external;
@@ -77,8 +77,8 @@ declare function a:extract-text($archive as xs:base64Binary)
  :
  : @return strings
  :
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
  : @error if the file contains invalid utf-8 characters
- : @error if the file doesn't exist
  :)
 declare function a:extract-text($archive as xs:base64Binary, $entry-names as xs:string*)
     as xs:string* external;
@@ -89,10 +89,15 @@ declare function a:extract-text($archive as xs:base64Binary, $entry-names as xs:
  :
  : @return strings
  :
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
+ : @error a:ARCH0004 if the given $encoding is invalid or not supported
  : @error if the file contains invalid characters
  : @error if a transcoding error happens
  :)
-declare function a:extract-text($archive as xs:base64Binary, $entry-names as xs:string*, $encoding as xs:string)
+declare function a:extract-text(
+  $archive as xs:base64Binary,
+  $entry-names as xs:string*,
+  $encoding as xs:string)
     as xs:string* external;
   
 (:~

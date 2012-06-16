@@ -2,11 +2,12 @@
 #define _ORG_EXPATH_WWW_NS_ARCHIVE_H_
 
 #include <map>
+#include <set>
 
 #include <zorba/zorba.h>
+#include <zorba/item_factory.h>
 #include <zorba/external_module.h>
 #include <zorba/function.h>
-#include <zorba/dynamic_context.h>
 
 #define ZORBA_ARCHIVE_MAX_READ_BUF 2048
 
@@ -333,30 +334,69 @@ namespace zorba { namespace archive {
   class ExtractTextFunction : public ArchiveFunction
   {
     protected:
+      struct StringComparator
+      {
+        bool operator() (const zorba::String& s1, const zorba::String& s2)
+        {
+          return s1.compare(s2);
+        }
+      };
+
+      typedef std::set<zorba::String, StringComparator> EntryNameSet;
+      typedef EntryNameSet::const_iterator EntryNameSetIter;
+
+    protected:
       class ExtractItemSequence : public ArchiveItemSequence
       {
         public:
           class ExtractIterator : public ArchiveIterator
           {
             public:
-              ExtractIterator(zorba::Item& aArchive);
+              ExtractIterator(
+                  zorba::Item& aArchive,
+                  zorba::String& aEncoding,
+                  EntryNameSet& aEntryNames,
+                  bool aReturnAll);
 
               virtual ~ExtractIterator() {}
 
               bool
               next(zorba::Item& aItem);
+
+            protected:
+              zorba::String& theEncoding;
+              EntryNameSet& theEntryNames;
+              bool theReturnAll;
           };
 
         public:
-          ExtractItemSequence(zorba::Item& aArchive)
-            : ArchiveItemSequence(aArchive)
+          ExtractItemSequence(
+              zorba::Item& aArchive,
+              zorba::String& aEncoding,
+              bool aReturnAll)
+            : ArchiveItemSequence(aArchive),
+              theEncoding(aEncoding),
+              theReturnAll(aReturnAll)
           {}
 
           virtual ~ExtractItemSequence() {}
 
           zorba::Iterator_t
-          getIterator() { return new ExtractIterator(theArchive); }
+          getIterator()
+          {
+            return new ExtractIterator(
+                theArchive, theEncoding, theEntryNames, theReturnAll);
+          }
+
+          EntryNameSet&
+          getNameSet() { return theEntryNames; }
+
+        protected:
+          zorba::String theEncoding;
+          EntryNameSet theEntryNames;
+          bool theReturnAll;
       };
+
     public:
       ExtractTextFunction(const ArchiveModule* aModule)
         : ArchiveFunction(aModule) {}

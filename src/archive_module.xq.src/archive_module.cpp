@@ -2,12 +2,8 @@
 #include <zorba/singleton_item_sequence.h>
 #include <zorba/diagnostic_list.h>
 #include <zorba/empty_sequence.h>
-#include <zorba/store_manager.h>
 #include <zorba/user_exception.h>
-#include <zorba/uri_resolvers.h>
-#include <zorba/vector_item_sequence.h>
-#include <zorba/serializer.h>
-#include <zorba/xquery.h>
+#include <zorba/transcode_stream.h>
 #include <stdio.h>
 #include <string>
 #include <cassert>
@@ -15,6 +11,7 @@
 #include <sys/types.h>
 #include "archive.h"
 #include "archive_entry.h"
+#include "mem_streambuf.h"
 
 #ifdef WIN32
 #  include <MMSystem.h>
@@ -431,9 +428,8 @@ namespace zorba { namespace archive {
     return true;
   }
 
-/*******************************************************************************************
- *******************************************************************************************/
- 
+/*******************************************************************************
+ ******************************************************************************/
   zorba::ItemSequence_t
   ExtractTextFunction::evaluate(
     const Arguments_t& aArgs,
@@ -441,28 +437,83 @@ namespace zorba { namespace archive {
     const zorba::DynamicContext* aDctx) const 
   { 
     Item lArchive = getOneItem(aArgs, 0);
+
+    zorba::String lEncoding("UTF-8");
+    if (aArgs.size() == 3)
+    {
+      zorba::Item lItem = getOneItem(aArgs, 2);
+      lEncoding = lItem.getStringValue();
+      if (!transcode::is_supported(lEncoding.c_str()))
+      {
+        std::ostringstream lMsg;
+        lMsg << lEncoding << ": unsupported encoding";
+          
+        throwError("ARCH0004", lMsg.str().c_str());
+      }
+    }
     
-    return ItemSequence_t(new ExtractItemSequence(lArchive));
+    // return all entries if no second arg is given
+    bool lReturnAll = aArgs.size() == 1;
+
+    std::auto_ptr<ExtractItemSequence> lSeq(
+        new ExtractItemSequence(lArchive, lEncoding, lReturnAll));
+
+    // get the names of all entries that should be retruned
+    if (aArgs.size() > 1)
+    {
+      EntryNameSet& lSet = lSeq->getNameSet();
+
+      zorba::Item lItem;
+      Iterator_t lIter = aArgs[1]->getIterator();
+      lIter->open();
+      while (lIter->next(lItem))
+      {
+        lSet.insert(lItem.getStringValue());
+      }
+
+      lIter->close();
+      lReturnAll = false;
+    }
+
+    return ItemSequence_t(lSeq.release());
   }
 
   ExtractTextFunction::ExtractItemSequence::ExtractIterator::ExtractIterator(
-      zorba::Item& aArchive)
-    : ArchiveIterator(aArchive)
+      zorba::Item& aArchive,
+      zorba::String& aEncoding,
+      EntryNameSet& aEntryNames,
+      bool aReturnAll)
+    : ArchiveIterator(aArchive),
+      theEncoding(aEncoding),
+      theEntryNames(aEntryNames),
+      theReturnAll(aReturnAll)
   {
   }
 
   bool
-  ExtractTextFunction::ExtractItemSequence::ExtractIterator::next(zorba::Item& aRes)
+  ExtractTextFunction::ExtractItemSequence::ExtractIterator::next(
+      zorba::Item& aRes)
   {
     struct archive_entry *lEntry;
 
-    int lErr = archive_read_next_header(theArchive, &lEntry);
-    
-    if (lErr == ARCHIVE_EOF) return false;
-
-    if (lErr != ARCHIVE_OK)
+    while (true)
     {
-      ArchiveFunction::checkForError(lErr, 0, theArchive);
+      int lErr = archive_read_next_header(theArchive, &lEntry);
+      
+      if (lErr == ARCHIVE_EOF) return false;
+
+      if (lErr != ARCHIVE_OK)
+      {
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+      }
+
+      if (theReturnAll) break;
+
+      String lName = archive_entry_pathname(lEntry);
+      if (theEntryNames.find(lName) != theEntryNames.end())
+      {
+        break;
+      }
     }
 
     String lResult;
@@ -487,7 +538,25 @@ namespace zorba { namespace archive {
       lResult.append(lBuf, s);
     }
 
-    aRes = theFactory->createString(lResult);
+    if (transcode::is_necessary(theEncoding.c_str()))
+    {
+      zorba::String lTranscodedString;
+      transcode::stream<std::istringstream> lTranscoder(
+          theEncoding.c_str(),
+          lResult.c_str()
+        );
+      char buf[1024];
+      while (lTranscoder.good())
+      {
+        lTranscoder.read(buf, 1024);
+        lTranscodedString.append(buf, lTranscoder.gcount());
+      }
+      aRes = theFactory->createString(lTranscodedString);
+    }
+    else
+    {
+      aRes = theFactory->createString(lResult);
+    }
 
     return true;
   }
