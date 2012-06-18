@@ -470,12 +470,13 @@ namespace zorba { namespace archive {
     bool lReturnAll = aArgs.size() == 1;
 
     std::auto_ptr<ExtractItemSequence> lSeq(
-        new ExtractItemSequence(lArchive, lEncoding, lReturnAll));
+        new ExtractTextItemSequence(lArchive, lReturnAll, lEncoding));
 
     // get the names of all entries that should be retruned
     if (aArgs.size() > 1)
     {
-      EntryNameSet& lSet = lSeq->getNameSet();
+      ExtractFunction::ExtractItemSequence::EntryNameSet& lSet
+        = lSeq->getNameSet();
 
       zorba::Item lItem;
       Iterator_t lIter = aArgs[1]->getIterator();
@@ -486,26 +487,13 @@ namespace zorba { namespace archive {
       }
 
       lIter->close();
-      lReturnAll = false;
     }
 
     return ItemSequence_t(lSeq.release());
   }
 
-  ExtractTextFunction::ExtractItemSequence::ExtractIterator::ExtractIterator(
-      zorba::Item& aArchive,
-      zorba::String& aEncoding,
-      EntryNameSet& aEntryNames,
-      bool aReturnAll)
-    : ArchiveIterator(aArchive),
-      theEncoding(aEncoding),
-      theEntryNames(aEntryNames),
-      theReturnAll(aReturnAll)
-  {
-  }
-
   bool
-  ExtractTextFunction::ExtractItemSequence::ExtractIterator::next(
+  ExtractTextFunction::ExtractTextItemSequence::ExtractTextIterator::next(
       zorba::Item& aRes)
   {
     struct archive_entry *lEntry;
@@ -575,18 +563,94 @@ namespace zorba { namespace archive {
     return true;
   }
 
-/*******************************************************************************************
- *******************************************************************************************/
- 
+/*******************************************************************************
+ ******************************************************************************/
   zorba::ItemSequence_t
     ExtractBinaryFunction::evaluate(
       const Arguments_t& aArgs,
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
   {
-    throwError("ImplementationError", "Function not yet Implemented");
+    Item lArchive = getOneItem(aArgs, 0);
 
-    return ItemSequence_t(new EmptySequence());
+    // return all entries if no second arg is given
+    bool lReturnAll = aArgs.size() == 1;
+
+    std::auto_ptr<ExtractItemSequence> lSeq(
+        new ExtractBinaryItemSequence(lArchive, lReturnAll));
+
+    // get the names of all entries that should be retruned
+    if (aArgs.size() > 1)
+    {
+      ExtractFunction::ExtractItemSequence::EntryNameSet& lSet
+        = lSeq->getNameSet();
+
+      zorba::Item lItem;
+      Iterator_t lIter = aArgs[1]->getIterator();
+      lIter->open();
+      while (lIter->next(lItem))
+      {
+        lSet.insert(lItem.getStringValue());
+      }
+
+      lIter->close();
+    }
+
+    return ItemSequence_t(lSeq.release());
+  }
+
+  bool
+  ExtractBinaryFunction::ExtractBinaryItemSequence::ExtractBinaryIterator::next(
+      zorba::Item& aRes)
+  {
+    struct archive_entry *lEntry;
+
+    while (true)
+    {
+      int lErr = archive_read_next_header(theArchive, &lEntry);
+      
+      if (lErr == ARCHIVE_EOF) return false;
+
+      if (lErr != ARCHIVE_OK)
+      {
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+      }
+
+      if (theReturnAll) break;
+
+      String lName = archive_entry_pathname(lEntry);
+      if (theEntryNames.find(lName) != theEntryNames.end())
+      {
+        break;
+      }
+    }
+
+    std::vector<unsigned char> lResult;
+
+    // reserve some space if we know the decompressed size
+    if (archive_entry_size_is_set(lEntry))
+    {
+      long long lSize = archive_entry_size(lEntry);
+      lResult.reserve(lSize);
+    }
+
+    std::vector<unsigned char> lBuf;
+    lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
+
+    // read entire entry into a string
+    while (true)
+    {
+      int s = archive_read_data(
+          theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
+
+      if (s == 0) break;
+
+      lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+    }
+
+    aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+
+    return true;
   }
 
 /*******************************************************************************************
