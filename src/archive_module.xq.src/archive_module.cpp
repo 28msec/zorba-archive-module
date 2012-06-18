@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include "archive.h"
 #include "archive_entry.h"
-#include "mem_streambuf.h"
 
 #ifdef WIN32
 #  include <MMSystem.h>
@@ -261,10 +260,20 @@ namespace zorba { namespace archive {
     ArchiveItemSequence::CallbackData* lData =
       reinterpret_cast<ArchiveItemSequence::CallbackData*>(data);
 
+    if (lData->theEnd) return 0;
+
     std::istream* lStream = lData->theStream;
+
+    // seek to where we left of
+    if (lData->theSeekable) lStream->seekg(lData->thePos, std::ios::beg);
 
     lStream->read(lData->theBuffer, ZORBA_ARCHIVE_MAX_READ_BUF);
     *buff = lData->theBuffer;
+
+    if (lStream->eof()) lData->theEnd = true;
+
+    // remember the stream pos before leaving the function
+    if (lData->theSeekable) lData->thePos = lStream->tellg();
 
     return lStream->gcount(); 
   }
@@ -294,12 +303,17 @@ namespace zorba { namespace archive {
     if (theArchiveItem.isStreamable())
     {
       theData.theStream = &theArchiveItem.getStream();
+      theData.theStream->clear();
+      theData.theSeekable = theArchiveItem.isSeekable();
+      theData.theEnd = false;
+      theData.thePos = 0;
 
       // TODO do decoding of base64binary here if necessary
       assert(!theArchiveItem.isEncoded());
 
 	    lErr = archive_read_open(
           theArchive, &theData, 0, ArchiveItemSequence::readStream, 0);
+
       ArchiveFunction::checkForError(lErr, 0, theArchive);
     }
     else
@@ -530,7 +544,7 @@ namespace zorba { namespace archive {
     // read entire entry into a string
     while (true)
     {
-      size_t s = archive_read_data(
+      int s = archive_read_data(
           theArchive, &lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
 
       if (s == 0) break;

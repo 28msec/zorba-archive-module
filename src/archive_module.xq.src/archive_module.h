@@ -66,11 +66,18 @@ namespace zorba { namespace archive {
       {
         std::istream* theStream;
         char          theBuffer[ZORBA_ARCHIVE_MAX_READ_BUF];
+        bool          theSeekable;
+        bool          theEnd;
+        std::streampos thePos;
+
+        CallbackData()
+          : theStream(0), theSeekable(false), theEnd(false), thePos(0) {}
       };
 
     public:
       class ArchiveIterator : public Iterator
       {
+        protected:
         protected:
           zorba::Item theArchiveItem;
 
