@@ -56,6 +56,10 @@ namespace zorba { namespace archive {
       {
         lFunc = new UpdateFunction(this);
       }
+      else if (localName == "options")
+      {
+        lFunc = new OptionsFunction(this);
+      }
     }
 
     return lFunc;
@@ -248,6 +252,44 @@ namespace zorba { namespace archive {
     args_iter->close();
 
     return lItem;
+  }
+
+  std::string
+  ArchiveFunction::formatName(int f)
+  {
+    // first 16 bit indicate the format family
+    switch (f & ARCHIVE_FORMAT_BASE_MASK)
+    {
+      case ARCHIVE_FORMAT_CPIO: return "CPIO";
+      case ARCHIVE_FORMAT_SHAR: return "SHAR";
+      case ARCHIVE_FORMAT_TAR: return "TAR";
+      case ARCHIVE_FORMAT_ISO9660: return "ISO9660";
+      case ARCHIVE_FORMAT_ZIP: return "ZIP";
+      case ARCHIVE_FORMAT_EMPTY: return "EMPTY";
+      case ARCHIVE_FORMAT_AR: return "AR";
+      case ARCHIVE_FORMAT_MTREE: return "MTREE";
+      case ARCHIVE_FORMAT_RAW: return "RAW";
+      case ARCHIVE_FORMAT_XAR: return "XAR";
+      default: return "";
+    }
+  }
+
+  std::string
+  ArchiveFunction::compressionName(int c)
+  {
+    switch (c)
+    {
+      case ARCHIVE_COMPRESSION_NONE: return "NONE";
+      case ARCHIVE_COMPRESSION_GZIP: return "GZIP";
+      case ARCHIVE_COMPRESSION_BZIP2: return "BZIP2";
+      case ARCHIVE_COMPRESSION_COMPRESS: return "COMPRESS";
+      case ARCHIVE_COMPRESSION_PROGRAM: return "PROGRAM";
+      case ARCHIVE_COMPRESSION_LZMA: return "LZMA";
+      case ARCHIVE_COMPRESSION_XZ: return "XZ";
+      case ARCHIVE_COMPRESSION_UU: return "UU";
+      case ARCHIVE_COMPRESSION_RPM: return "RPM";
+      default: return "";
+    }
   }
 
 #ifdef WIN32
@@ -649,6 +691,90 @@ namespace zorba { namespace archive {
     }
 
     aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+
+    return true;
+  }
+
+
+/*******************************************************************************
+ ******************************************************************************/
+  zorba::ItemSequence_t
+    OptionsFunction::evaluate(
+      const Arguments_t& aArgs,
+      const zorba::StaticContext* aSctx,
+      const zorba::DynamicContext* aDctx) const 
+  {
+    Item lArchive = getOneItem(aArgs, 0);
+
+    return ItemSequence_t(new OptionsItemSequence(lArchive));
+  }
+
+  bool
+  OptionsFunction::OptionsItemSequence::OptionsIterator::next(
+      zorba::Item& aRes)
+  {
+    if (lExhausted) return false;
+
+    lExhausted = true;
+
+    struct archive_entry *lEntry;
+
+    // to get the format, we need to peek into the first header
+    int lErr = archive_read_next_header(theArchive, &lEntry);
+
+    if (lErr != ARCHIVE_OK && lErr != ARCHIVE_EOF)
+    {
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
+    }
+
+    std::string lFormat =
+      ArchiveFunction::formatName(archive_format(theArchive));
+    std::string lAlgorithm =
+      ArchiveFunction::compressionName(archive_compression(theArchive));
+
+    if (lFormat == "ZIP")
+    {
+      lAlgorithm = "DEFLATE";
+    }
+
+    zorba::Item lUntypedQName = theFactory->createQName(
+        "http://www.w3.org/2001/XMLSchema", "untyped");
+    zorba::Item lTmpQName = lUntypedQName;
+
+    zorba::Item lOptionsQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "options");
+
+    zorba::Item lFormatQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "format");
+
+    zorba::Item lAlgorithmQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "algorithm");
+
+    zorba::Item lValueQName = theFactory->createQName("", "value"); 
+
+    zorba::Item lNoParent;
+    aRes = theFactory->createElementNode(
+        lNoParent, lOptionsQName, lTmpQName, true, false, NsBindings());
+
+    lTmpQName = lUntypedQName;
+    zorba::Item lFormatItem = theFactory->createElementNode(
+        aRes, lFormatQName, lTmpQName, true, false, NsBindings());
+
+    lTmpQName = lUntypedQName;
+    zorba::Item lAlgorithmItem = theFactory->createElementNode(
+        aRes, lAlgorithmQName, lTmpQName, true, false, NsBindings());
+
+    zorba::Item lTmpItem = theFactory->createString(lFormat);
+
+    lTmpQName = lUntypedQName;
+    theFactory->createAttributeNode(
+        lFormatItem, lValueQName, lTmpQName, lTmpItem);
+
+    lTmpItem = theFactory->createString(lAlgorithm);
+
+    lTmpQName = lUntypedQName;
+    theFactory->createAttributeNode(
+        lAlgorithmItem, lValueQName, lTmpQName, lTmpItem);
 
     return true;
   }

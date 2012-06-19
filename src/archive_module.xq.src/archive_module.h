@@ -266,6 +266,12 @@ namespace zorba { namespace archive {
       static void
         checkForError(int aErrNo, const char* aLocalName, struct archive *a);
 
+      static std::string
+        formatName(int f);
+
+      static std::string
+        compressionName(int c);
+
   };
 
 /*******************************************************************************
@@ -512,6 +518,65 @@ namespace zorba { namespace archive {
 
       virtual zorba::String
         getLocalName() const { return "extract-binary"; }
+
+      virtual zorba::ItemSequence_t
+        evaluate(const Arguments_t&,
+                 const zorba::StaticContext*,
+                 const zorba::DynamicContext*) const;
+  };
+
+/*******************************************************************************
+ ******************************************************************************/
+  class OptionsFunction : public ArchiveFunction
+  {
+    protected:
+    class OptionsItemSequence : public ArchiveItemSequence
+    {
+      public:
+        class OptionsIterator : public ArchiveIterator
+        {
+          public:
+            OptionsIterator(zorba::Item& aArchive)
+              : ArchiveIterator(aArchive) {}
+
+            virtual ~OptionsIterator() {}
+
+            void
+            open()
+            {
+              ArchiveIterator::open();
+              lExhausted = false;
+            }
+
+            bool
+            next(zorba::Item& aItem);
+
+          protected:
+            bool lExhausted;
+        };
+
+      public:
+        OptionsItemSequence(zorba::Item& aArchive)
+          : ArchiveItemSequence(aArchive)
+        {}
+
+        virtual ~OptionsItemSequence() {}
+
+        zorba::Iterator_t
+        getIterator()
+        {
+          return new OptionsIterator(theArchive);
+        }
+    };
+
+    public:
+      OptionsFunction(const ArchiveModule* aModule)
+        : ArchiveFunction(aModule) {}
+
+      virtual ~OptionsFunction() {}
+
+      virtual zorba::String
+        getLocalName() const { return "options"; }
 
       virtual zorba::ItemSequence_t
         evaluate(const Arguments_t&,

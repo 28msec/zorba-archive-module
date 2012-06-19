@@ -139,3 +139,15 @@ declare function a:update($archive as xs:base64Binary, $entries as element(entry
  :)
 declare function a:delete($archive as xs:base64Binary, $entry-names as xs:string*)
     as xs:base64Binary external;
+
+(:~
+ : Returns the algorithm and format options of the given archive.
+ :
+ : @param $archive the archive as base64Binary
+ :
+ : @return the algorithm and format options
+ :
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
+ :)
+declare function a:options($archive as xs:base64Binary)
+  as element(a:options) external;
