@@ -58,6 +58,10 @@ namespace zorba { namespace archive {
       {
         lFunc = new UpdateFunction(this);
       }
+      else if (localName == "options")
+      {
+        lFunc = new OptionsFunction(this);
+      }
     }
 
     return lFunc;
@@ -207,6 +211,44 @@ namespace zorba { namespace archive {
     args_iter->close();
 
     return lItem;
+  }
+
+  std::string
+  ArchiveFunction::formatName(int f)
+  {
+    // first 16 bit indicate the format family
+    switch (f & ARCHIVE_FORMAT_BASE_MASK)
+    {
+      case ARCHIVE_FORMAT_CPIO: return "CPIO";
+      case ARCHIVE_FORMAT_SHAR: return "SHAR";
+      case ARCHIVE_FORMAT_TAR: return "TAR";
+      case ARCHIVE_FORMAT_ISO9660: return "ISO9660";
+      case ARCHIVE_FORMAT_ZIP: return "ZIP";
+      case ARCHIVE_FORMAT_EMPTY: return "EMPTY";
+      case ARCHIVE_FORMAT_AR: return "AR";
+      case ARCHIVE_FORMAT_MTREE: return "MTREE";
+      case ARCHIVE_FORMAT_RAW: return "RAW";
+      case ARCHIVE_FORMAT_XAR: return "XAR";
+      default: return "";
+    }
+  }
+
+  std::string
+  ArchiveFunction::compressionName(int c)
+  {
+    switch (c)
+    {
+      case ARCHIVE_COMPRESSION_NONE: return "NONE";
+      case ARCHIVE_COMPRESSION_GZIP: return "GZIP";
+      case ARCHIVE_COMPRESSION_BZIP2: return "BZIP2";
+      case ARCHIVE_COMPRESSION_COMPRESS: return "COMPRESS";
+      case ARCHIVE_COMPRESSION_PROGRAM: return "PROGRAM";
+      case ARCHIVE_COMPRESSION_LZMA: return "LZMA";
+      case ARCHIVE_COMPRESSION_XZ: return "XZ";
+      case ARCHIVE_COMPRESSION_UU: return "UU";
+      case ARCHIVE_COMPRESSION_RPM: return "RPM";
+      default: return "";
+    }
   }
 
 #ifdef WIN32
@@ -549,12 +591,13 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
     bool lReturnAll = aArgs.size() == 1;
 
     std::auto_ptr<ExtractItemSequence> lSeq(
-        new ExtractItemSequence(lArchive, lEncoding, lReturnAll));
+        new ExtractTextItemSequence(lArchive, lReturnAll, lEncoding));
 
     // get the names of all entries that should be retruned
     if (aArgs.size() > 1)
     {
-      EntryNameSet& lSet = lSeq->getNameSet();
+      ExtractFunction::ExtractItemSequence::EntryNameSet& lSet
+        = lSeq->getNameSet();
 
       zorba::Item lItem;
       Iterator_t lIter = aArgs[1]->getIterator();
@@ -565,26 +608,13 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
       }
 
       lIter->close();
-      lReturnAll = false;
     }
 
     return ItemSequence_t(lSeq.release());
   }
 
-  ExtractTextFunction::ExtractItemSequence::ExtractIterator::ExtractIterator(
-      zorba::Item& aArchive,
-      zorba::String& aEncoding,
-      EntryNameSet& aEntryNames,
-      bool aReturnAll)
-    : ArchiveIterator(aArchive),
-      theEncoding(aEncoding),
-      theEntryNames(aEntryNames),
-      theReturnAll(aReturnAll)
-  {
-  }
-
   bool
-  ExtractTextFunction::ExtractItemSequence::ExtractIterator::next(
+  ExtractTextFunction::ExtractTextItemSequence::ExtractTextIterator::next(
       zorba::Item& aRes)
   {
     struct archive_entry *lEntry;
@@ -654,18 +684,178 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
     return true;
   }
 
-/*******************************************************************************************
- *******************************************************************************************/
- 
+/*******************************************************************************
+ ******************************************************************************/
   zorba::ItemSequence_t
     ExtractBinaryFunction::evaluate(
       const Arguments_t& aArgs,
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
   {
-    throwError("ImplementationError", "Function not yet Implemented");
+    Item lArchive = getOneItem(aArgs, 0);
 
-    return ItemSequence_t(new EmptySequence());
+    // return all entries if no second arg is given
+    bool lReturnAll = aArgs.size() == 1;
+
+    std::auto_ptr<ExtractItemSequence> lSeq(
+        new ExtractBinaryItemSequence(lArchive, lReturnAll));
+
+    // get the names of all entries that should be retruned
+    if (aArgs.size() > 1)
+    {
+      ExtractFunction::ExtractItemSequence::EntryNameSet& lSet
+        = lSeq->getNameSet();
+
+      zorba::Item lItem;
+      Iterator_t lIter = aArgs[1]->getIterator();
+      lIter->open();
+      while (lIter->next(lItem))
+      {
+        lSet.insert(lItem.getStringValue());
+      }
+
+      lIter->close();
+    }
+
+    return ItemSequence_t(lSeq.release());
+  }
+
+  bool
+  ExtractBinaryFunction::ExtractBinaryItemSequence::ExtractBinaryIterator::next(
+      zorba::Item& aRes)
+  {
+    struct archive_entry *lEntry;
+
+    while (true)
+    {
+      int lErr = archive_read_next_header(theArchive, &lEntry);
+      
+      if (lErr == ARCHIVE_EOF) return false;
+
+      if (lErr != ARCHIVE_OK)
+      {
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+      }
+
+      if (theReturnAll) break;
+
+      String lName = archive_entry_pathname(lEntry);
+      if (theEntryNames.find(lName) != theEntryNames.end())
+      {
+        break;
+      }
+    }
+
+    std::vector<unsigned char> lResult;
+
+    // reserve some space if we know the decompressed size
+    if (archive_entry_size_is_set(lEntry))
+    {
+      long long lSize = archive_entry_size(lEntry);
+      lResult.reserve(lSize);
+    }
+
+    std::vector<unsigned char> lBuf;
+    lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
+
+    // read entire entry into a string
+    while (true)
+    {
+      int s = archive_read_data(
+          theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
+
+      if (s == 0) break;
+
+      lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+    }
+
+    aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+
+    return true;
+  }
+
+
+/*******************************************************************************
+ ******************************************************************************/
+  zorba::ItemSequence_t
+    OptionsFunction::evaluate(
+      const Arguments_t& aArgs,
+      const zorba::StaticContext* aSctx,
+      const zorba::DynamicContext* aDctx) const 
+  {
+    Item lArchive = getOneItem(aArgs, 0);
+
+    return ItemSequence_t(new OptionsItemSequence(lArchive));
+  }
+
+  bool
+  OptionsFunction::OptionsItemSequence::OptionsIterator::next(
+      zorba::Item& aRes)
+  {
+    if (lExhausted) return false;
+
+    lExhausted = true;
+
+    struct archive_entry *lEntry;
+
+    // to get the format, we need to peek into the first header
+    int lErr = archive_read_next_header(theArchive, &lEntry);
+
+    if (lErr != ARCHIVE_OK && lErr != ARCHIVE_EOF)
+    {
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
+    }
+
+    std::string lFormat =
+      ArchiveFunction::formatName(archive_format(theArchive));
+    std::string lAlgorithm =
+      ArchiveFunction::compressionName(archive_compression(theArchive));
+
+    if (lFormat == "ZIP")
+    {
+      lAlgorithm = "DEFLATE";
+    }
+
+    zorba::Item lUntypedQName = theFactory->createQName(
+        "http://www.w3.org/2001/XMLSchema", "untyped");
+    zorba::Item lTmpQName = lUntypedQName;
+
+    zorba::Item lOptionsQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "options");
+
+    zorba::Item lFormatQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "format");
+
+    zorba::Item lAlgorithmQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "algorithm");
+
+    zorba::Item lValueQName = theFactory->createQName("", "value"); 
+
+    zorba::Item lNoParent;
+    aRes = theFactory->createElementNode(
+        lNoParent, lOptionsQName, lTmpQName, true, false, NsBindings());
+
+    lTmpQName = lUntypedQName;
+    zorba::Item lFormatItem = theFactory->createElementNode(
+        aRes, lFormatQName, lTmpQName, true, false, NsBindings());
+
+    lTmpQName = lUntypedQName;
+    zorba::Item lAlgorithmItem = theFactory->createElementNode(
+        aRes, lAlgorithmQName, lTmpQName, true, false, NsBindings());
+
+    zorba::Item lTmpItem = theFactory->createString(lFormat);
+
+    lTmpQName = lUntypedQName;
+    theFactory->createAttributeNode(
+        lFormatItem, lValueQName, lTmpQName, lTmpItem);
+
+    lTmpItem = theFactory->createString(lAlgorithm);
+
+    lTmpQName = lUntypedQName;
+    theFactory->createAttributeNode(
+        lAlgorithmItem, lValueQName, lTmpQName, lTmpItem);
+
+    return true;
   }
 
 /*******************************************************************************************

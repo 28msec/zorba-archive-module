@@ -216,6 +216,12 @@ namespace zorba { namespace archive {
       static void
         checkForError(int aErrNo, const char* aLocalName, struct archive *a);
 
+      static std::string
+        formatName(int f);
+
+      static std::string
+        compressionName(int c);
+
   };
 
 /*******************************************************************************
@@ -314,42 +320,40 @@ namespace zorba { namespace archive {
                const zorba::DynamicContext*) const;
   };
 
+
 /*******************************************************************************
  ******************************************************************************/
-  class ExtractTextFunction : public ArchiveFunction
+  class ExtractFunction : public ArchiveFunction
   {
-    protected:
-      struct StringComparator
-      {
-        bool operator() (const zorba::String& s1, const zorba::String& s2)
-        {
-          return s1.compare(s2);
-        }
-      };
-
-      typedef std::set<zorba::String, StringComparator> EntryNameSet;
-      typedef EntryNameSet::const_iterator EntryNameSetIter;
-
     protected:
       class ExtractItemSequence : public ArchiveItemSequence
       {
         public:
+          struct StringComparator
+          {
+            bool operator() (const zorba::String& s1, const zorba::String& s2)
+            {
+              return s1.compare(s2);
+            }
+          };
+
+          typedef std::set<zorba::String, StringComparator> EntryNameSet;
+          typedef EntryNameSet::const_iterator EntryNameSetIter;
+
           class ExtractIterator : public ArchiveIterator
           {
             public:
               ExtractIterator(
                   zorba::Item& aArchive,
-                  zorba::String& aEncoding,
                   EntryNameSet& aEntryNames,
-                  bool aReturnAll);
+                  bool aReturnAll)
+                : ArchiveIterator(aArchive),
+                  theEntryNames(aEntryNames),
+                  theReturnAll(aReturnAll) {}
 
               virtual ~ExtractIterator() {}
 
-              bool
-              next(zorba::Item& aItem);
-
             protected:
-              zorba::String& theEncoding;
               EntryNameSet& theEntryNames;
               bool theReturnAll;
           };
@@ -357,34 +361,81 @@ namespace zorba { namespace archive {
         public:
           ExtractItemSequence(
               zorba::Item& aArchive,
-              zorba::String& aEncoding,
               bool aReturnAll)
             : ArchiveItemSequence(aArchive),
-              theEncoding(aEncoding),
               theReturnAll(aReturnAll)
           {}
 
           virtual ~ExtractItemSequence() {}
 
-          zorba::Iterator_t
-          getIterator()
-          {
-            return new ExtractIterator(
-                theArchive, theEncoding, theEntryNames, theReturnAll);
-          }
-
           EntryNameSet&
           getNameSet() { return theEntryNames; }
 
         protected:
-          zorba::String theEncoding;
           EntryNameSet theEntryNames;
           bool theReturnAll;
       };
 
     public:
-      ExtractTextFunction(const ArchiveModule* aModule)
+      ExtractFunction(const ArchiveModule* aModule)
         : ArchiveFunction(aModule) {}
+
+      virtual ~ExtractFunction() {}
+  };
+
+/*******************************************************************************
+ ******************************************************************************/
+  class ExtractTextFunction : public ExtractFunction
+  {
+    protected:
+      class ExtractTextItemSequence : public ExtractItemSequence
+      {
+        public:
+          class ExtractTextIterator : public ExtractIterator
+          {
+            public:
+              ExtractTextIterator(
+                  zorba::Item& aArchive,
+                  ExtractItemSequence::EntryNameSet& aEntryNames,
+                  bool aReturnAll,
+                  zorba::String& aEncoding)
+                : ExtractIterator(aArchive, aEntryNames, aReturnAll),
+                  theEncoding(aEncoding) {}
+
+              virtual ~ExtractTextIterator() {}
+
+              bool
+              next(zorba::Item& aItem);
+
+            protected:
+              zorba::String& theEncoding;
+          };
+
+        public:
+          ExtractTextItemSequence(
+              zorba::Item& aArchive,
+              bool aReturnAll,
+              zorba::String& aEncoding)
+            : ExtractItemSequence(aArchive, aReturnAll),
+              theEncoding(aEncoding)
+          {}
+
+          virtual ~ExtractTextItemSequence() {}
+
+          zorba::Iterator_t
+          getIterator()
+          {
+            return new ExtractTextIterator(
+                theArchive, theEntryNames, theReturnAll, theEncoding);
+          }
+
+        protected:
+          zorba::String theEncoding;
+      };
+
+    public:
+      ExtractTextFunction(const ArchiveModule* aModule)
+        : ExtractFunction(aModule) {}
 
       virtual ~ExtractTextFunction() {}
 
@@ -399,14 +450,111 @@ namespace zorba { namespace archive {
 
 /*******************************************************************************
  ******************************************************************************/
-  class ExtractBinaryFunction : public ArchiveFunction{
-    public:
-      ExtractBinaryFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
+  class ExtractBinaryFunction : public ExtractFunction
+  {
+    protected:
+      class ExtractBinaryItemSequence : public ExtractItemSequence
+      {
+        public:
+          class ExtractBinaryIterator : public ExtractIterator
+          {
+            public:
+              ExtractBinaryIterator(
+                  zorba::Item& aArchive,
+                  ExtractItemSequence::EntryNameSet& aEntryNames,
+                  bool aReturnAll)
+                : ExtractIterator(aArchive, aEntryNames, aReturnAll) {}
 
-      virtual ~ExtractBinaryFunction(){}
+              virtual ~ExtractBinaryIterator() {}
+
+              bool
+              next(zorba::Item& aItem);
+          };
+
+        public:
+          ExtractBinaryItemSequence(
+              zorba::Item& aArchive,
+              bool aReturnAll)
+            : ExtractItemSequence(aArchive, aReturnAll)
+          {}
+
+          virtual ~ExtractBinaryItemSequence() {}
+
+          zorba::Iterator_t
+          getIterator()
+          {
+            return new ExtractBinaryIterator(
+                theArchive, theEntryNames, theReturnAll);
+          }
+      };
+
+    public:
+      ExtractBinaryFunction(const ArchiveModule* aModule)
+        : ExtractFunction(aModule) {}
+
+      virtual ~ExtractBinaryFunction() {}
 
       virtual zorba::String
         getLocalName() const { return "extract-binary"; }
+
+      virtual zorba::ItemSequence_t
+        evaluate(const Arguments_t&,
+                 const zorba::StaticContext*,
+                 const zorba::DynamicContext*) const;
+  };
+
+/*******************************************************************************
+ ******************************************************************************/
+  class OptionsFunction : public ArchiveFunction
+  {
+    protected:
+    class OptionsItemSequence : public ArchiveItemSequence
+    {
+      public:
+        class OptionsIterator : public ArchiveIterator
+        {
+          public:
+            OptionsIterator(zorba::Item& aArchive)
+              : ArchiveIterator(aArchive) {}
+
+            virtual ~OptionsIterator() {}
+
+            void
+            open()
+            {
+              ArchiveIterator::open();
+              lExhausted = false;
+            }
+
+            bool
+            next(zorba::Item& aItem);
+
+          protected:
+            bool lExhausted;
+        };
+
+      public:
+        OptionsItemSequence(zorba::Item& aArchive)
+          : ArchiveItemSequence(aArchive)
+        {}
+
+        virtual ~OptionsItemSequence() {}
+
+        zorba::Iterator_t
+        getIterator()
+        {
+          return new OptionsIterator(theArchive);
+        }
+    };
+
+    public:
+      OptionsFunction(const ArchiveModule* aModule)
+        : ArchiveFunction(aModule) {}
+
+      virtual ~OptionsFunction() {}
+
+      virtual zorba::String
+        getLocalName() const { return "options"; }
 
       virtual zorba::ItemSequence_t
         evaluate(const Arguments_t&,
