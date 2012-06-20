@@ -8,6 +8,8 @@
 #include <string>
 #include <cassert>
 
+#include <iostream>
+#include <fstream>
 #include <sys/types.h>
 #include "archive.h"
 #include "archive_entry.h"
@@ -112,100 +114,57 @@ namespace zorba { namespace archive {
   {
   }
 
-  String 
-    ArchiveFunction::getURI() const
+  ArchiveFunction::ArchiveEntries::ArchiveEntry::ArchiveEntry(zorba::Item aEntry)
   {
-    return theModule->getURI();
-  }
-
-  void 
-    ArchiveFunction::processEntries(Item entries_node, ArchiveEntries& entries)
-  {
-    if (!entries_node.isNull())
+    if (!aEntry.isNull())
     {
-      Item entries_name;
-      entries_node.getNodeName(entries_name);
-      
-      if (entries_name.getLocalName() == "entries")
+      Item entry_name;
+      aEntry.getNodeName(entry_name);
+
+      theEntryPath = aEntry.getStringValue();
+
+      if (entry_name.getLocalName()  == "entry")
       {
         Item attr;
-        Iterator_t attr_iter = entries_node.getAttributes();
+        Iterator_t attr_iter = aEntry.getAttributes();
         attr_iter->open();
         while (attr_iter->next(attr))
         {
           Item attr_name;
           attr.getNodeName(attr_name);
-          if (attr_name.getLocalName() == "compression-level")
+
+          if (attr_name.getLocalName() == "last-modified")
           {
-            //entries.setCompressionLevel(attr.getIntValue());
-            entries.setCompressionLevel(atoi(attr.getStringValue().c_str()));
-          }
-          else if (attr_name.getLocalName() == "compressed-size")
-          {
-            //entries.setCompressedSize(attr.getIntValue());
-            entries.setCompressionLevel(atoi(attr.getStringValue().c_str()));
+            //add a way to add the time value
           }
           else if (attr_name.getLocalName() == "size")
           {
-            //entries.setUncompressedSize(attr.getIntValue());
-            entries.setCompressionLevel(atoi(attr.getStringValue().c_str()));
-          }
-          else if (attr_name.getLocalName() == "encrypted")
-          {
-            //entries.setEncrypted(attr.getBooleanValue());
-            attr.getStringValue() == "true" ? entries.setEncrypted(true) : entries.setEncrypted(false);
-          }
-          else if (attr_name.getLocalName() == "last-modified")
-          {
-          }
-        }
-        attr_iter->close();
-      }
+            //TODO: Replace when schema is validation
+            //theSize = attr_name.getIntValue();
+            theSize = std::atoi(attr_name.getStringValue().c_str());
 
-      Item child;
-      Iterator_t children = entries_node.getChildren();
-      children->open();
-
-      while (children->next(child))
-      {
-        if (child.getNodeKind() != store::StoreConsts::elementNode)
-          continue;
-
-        Item child_name;
-        child.getNodeName(child_name);
-        std::string local_name = child_name.getLocalName().c_str();
-        if (child_name.getLocalName() == "entry")
-        {
-          ArchiveEntry entry(child.getStringValue());
-
-          Item attr;
-          Iterator_t attr_iter = child.getAttributes();
-          attr_iter->open();
-          while (attr_iter->next(attr))
-          {
-            Item attr_name;
-            attr.getNodeName(attr_name);
-            if (attr_name.getLocalName() == "compression-level")
-            {
-              //entry.setCompressionLevel(attr.getIntValue());
-              entries.setCompressionLevel(atoi(attr.getStringValue().c_str()));
-            }
-            else if (attr_name.getLocalName() == "delete")
-            {
-              //entry.setDeleteEntry(attr.getBooleanValue());
-              attr.getStringValue() == "true" ? entries.setEncrypted(true) : entries.setEncrypted(false);
-            }
-            else if (attr_name.getLocalName() == "encoding")
-            {
-              entry.setEntryEncoding(attr.getStringValue());
-            }
           }
-          attr_iter->close();
-          entries.insertEntry(entry);
+          //TODO: add entry parameters if missing.
         }
       }
-        
     }
+  }
+
+  ArchiveFunction::ArchiveEntries::ArchiveEntries(zorba::Iterator_t aEntriesIterator)
+  {
+    Item lEntry;
+    aEntriesIterator->open();
+    while(aEntriesIterator->next(lEntry))
+    {
+      addEntry(lEntry);
+    }
+    aEntriesIterator->close();
+  }
+
+  String 
+    ArchiveFunction::getURI() const
+  {
+    return theModule->getURI();
   }
 
   void
@@ -278,7 +237,7 @@ namespace zorba { namespace archive {
     return lStream->gcount(); 
   }
 
-  ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
+ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
     : theArchiveItem(a),
       theArchive(0),
       theFactory(Zorba::getInstance(0)->getItemFactory())
@@ -336,32 +295,152 @@ namespace zorba { namespace archive {
     theArchive = 0;
   }
 
-/*******************************************************************************
- ******************************************************************************/
+#ifdef WIN32
+  long
+#else
+  ssize_t
+#endif
+  ArchiveFunction::writeStream(struct archive *, void *func, const void *buff, size_t n)
+  {
+    CreateFunction::ArchiveCompressor* lFunc =
+      reinterpret_cast<CreateFunction::ArchiveCompressor*>(func);
+
+    const char * theBuff = 
+      static_cast<const char *>(buff);
+    lFunc->getStream()->write(theBuff, n);
+  
+    return n;
+  }
+
+/*******************************************************************************************
+ *******************************************************************************************/
+
+  CreateFunction::ArchiveCompressor::ArchiveCompressor(zorba::Iterator_t aEntries)
+    : theArchive(0),
+      theEntry(0)
+  {
+    //pass to constructor
+    theArchiveEntries = new ArchiveEntries(aEntries);
+
+    theArchive = archive_write_new();
+
+    if (!theArchive)
+      ArchiveFunction::throwError(
+        "ARCH9999", "internal error (couldn't create archive)");
+        
+    theBuffer = new char[1024];
+    theStream = new std::stringstream(std::stringstream::in | std::stringstream::out);
+
+    archive_write_set_format_ustar(theArchive);
+    archive_write_set_compression_bzip2(theArchive);
+    archive_write_set_bytes_per_block(theArchive, 1024);
+    
+    archive_write_open(theArchive, this, 0, ArchiveFunction::writeStream, 0);
+    theEntry = archive_entry_new();
+  }
+
+  void
+    CreateFunction::ArchiveCompressor::close()
+  {
+    delete[] theBuffer;
+    theBuffer = 0;
+    archive_entry_clear(theEntry);
+    archive_write_finish_entry(theArchive);
+  }
+
+  CreateFunction::ArchiveCompressor::~ArchiveCompressor()
+  {
+    archive_entry_free(theEntry);
+	  archive_write_close(theArchive);
+	  archive_write_free(theArchive);
+  }
+
+  bool
+    CreateFunction::ArchiveCompressor::compress(zorba::Iterator_t aFiles)
+  {
+    Item lFile;
+    aFiles->open();
+
+    for (int pos = 0 ; aFiles->next(lFile) ; pos++)
+    {
+      archive_entry_set_pathname(theEntry, theArchiveEntries->getEntryPath(pos).c_str());
+      //including the size of a file is obligatory
+      //TODO: calculate the size of a file if it wasn't set as an entry parameter
+      archive_entry_set_size(theEntry, theArchiveEntries->getEntrySize(pos));
+
+      //specifies file as a regular file
+      //TODO: modified to allow the creation of empty directories
+      archive_entry_set_filetype(theEntry, AE_IFREG);
+
+      //specifies the permits of a file
+      archive_entry_set_perm(theEntry, 0644);
+
+      archive_write_header(theArchive, theEntry);
+
+
+      //int lErr = archive_write_data(theArchive, lFile.getStringValue().c_str(), theArchiveEntries->getEntrySize(pos));
+      //ArchiveFunction::checkForError(lErr, 0, theArchive);
+        
+      theFileStream = &lFile.getStream();
+      theFileStream->read(theBuffer, 1024);
+      int len = theFileStream->gcount();
+      while (len > 0)
+      {
+        int lErr = archive_write_data(theArchive, theBuffer, len);
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+        theFileStream->read(theBuffer, 1024);
+        len = theFileStream->gcount();
+      }
+       
+      archive_entry_clear(theEntry);
+      archive_write_finish_entry(theArchive);
+      
+    }
+
+    aFiles->close();
+    //TODO: add error check
+    return true;
+  }
+
+
+  std::stringstream*
+    CreateFunction::ArchiveCompressor::getStream() const
+  {
+    return theStream;
+  }
+
   zorba::ItemSequence_t
     CreateFunction::evaluate(
       const Arguments_t& aArgs,
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
   {
+    //get iterator for Entries
+    Iterator_t entriesIter = aArgs[0]->getIterator();
+    
+    ArchiveCompressor lArchive(entriesIter);
 
-    Item entries_item;
-    Iterator_t arg0_iter = aArgs[0]->getIterator();
-    arg0_iter->open();
-    arg0_iter->next(entries_item);
-    arg0_iter->close();
+    Iterator_t fileIter = aArgs[1]->getIterator();
+    
+    lArchive.compress(fileIter);
 
-    ArchiveEntries entries;
 
-    ArchiveFunction::processEntries(entries_item, entries);
+    //Testign stream into a file
+    /*
+    std::filebuf fb;
+    fb.open ("C:\\Users\\juanza\\Desktop\\a.zip",std::ios::out);
+    std::ostream os(&fb);
+    os << lArchive.getStream();
+    fb.close();
+    */
 
-    throwError("ImplementationError", "Function not yet Implemented");
-
+    std::cout << lArchive.getStream();
     return ItemSequence_t(new EmptySequence());
   }
 
-/*******************************************************************************
- ******************************************************************************/
+
+/*******************************************************************************************
+ *******************************************************************************************/
   zorba::ItemSequence_t
   EntriesFunction::evaluate(
     const Arguments_t& aArgs,

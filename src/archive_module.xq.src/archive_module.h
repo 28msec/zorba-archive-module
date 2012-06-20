@@ -8,6 +8,7 @@
 #include <zorba/item_factory.h>
 #include <zorba/external_module.h>
 #include <zorba/function.h>
+#include <vector>
 
 #define ZORBA_ARCHIVE_MAX_READ_BUF 2048
 
@@ -78,7 +79,6 @@ namespace zorba { namespace archive {
       class ArchiveIterator : public Iterator
       {
         protected:
-        protected:
           zorba::Item theArchiveItem;
 
           struct archive* theArchive;
@@ -133,123 +133,73 @@ namespace zorba { namespace archive {
     protected:
       const ArchiveModule* theModule;
 
-    protected:
-      class ArchiveEntry
-      {
-      private:
-        int compressionLevel;
-        int uncompressedSize;
-        bool deleteEntry;
-        String entryEncoding;
-        String entryPath;
-
-      public:
-        ArchiveEntry(String entry)
-        {
-          entryPath = entry;
-          deleteEntry = false;
-        }
-        ~ArchiveEntry(){}
-
-        void setCompressionLevel(int level)
-        {
-          compressionLevel = level;
-        }
-        void setDeleteEntry(bool del)
-        {
-          deleteEntry = del;
-        }
-        void setEntryEncoding(String encoding)
-        {
-          entryEncoding = encoding;
-        }
-        void setUncompressedSize(int size)
-        {
-          uncompressedSize = size;
-        }
-        int getCompressionLevel()
-        {
-          return compressionLevel;
-        }
-        bool isDeleting()
-        {
-          return deleteEntry;
-        }
-        String getEntryEncoding()
-        {
-          return entryEncoding;
-        }
-        int getUncompressedSize()
-        {
-          return uncompressedSize;
-        }
-        String getPath()
-        {
-          return entryPath;
-        }
-      };
-
       class ArchiveEntries
       {
-      private:
-        int compressionLevel;
-        int compressedSize;
-        int uncompressedSize;
-        bool encrypted;
-        //lastmodified check time unix
-        std::vector<ArchiveEntry> entryList;
+      protected:
+
+        class ArchiveEntry
+        {
+        protected:
+          String theEntryPath;
+          int theSize;
+          time_t theLastModified;
+
+        public:
+          ArchiveEntry();
+          ArchiveEntry(zorba::Item aEntry);
+          ~ArchiveEntry(){};
+
+          String getEntryPath() { return theEntryPath; }
+          int getSize() { return theSize; }
+          int getLastModified() { return theLastModified; }
+
+        };
+        
+        ArchiveEntry *theEntry;
+        std::vector<ArchiveEntry> theEntries;
+
+        void addEntry(zorba::Item aEntry)
+        {
+          theEntry = new ArchiveEntry(aEntry);
+          theEntries.push_back(*theEntry);
+          delete theEntry;
+        };
 
       public:
+        ArchiveEntries();
+        ArchiveEntries(zorba::Iterator_t aEntriesIterator);
+        ~ArchiveEntries(){};
 
-        ArchiveEntries(){ encrypted = false; }
-        ~ArchiveEntries(){}
-
-        void setCompressionLevel(int level)
+        String 
+        getEntryPath(int aPos)
         {
-          compressionLevel = level;
+          return theEntries[aPos].getEntryPath();
         }
-        void setCompressedSize(int size)
+        int 
+        getEntrySize(int aPos)
         {
-          compressedSize = size;
+          return theEntries[aPos].getSize();
         }
-        void setUncompressedSize(int size)
+        int 
+        getEntryLastModified(int aPos)
         {
-          uncompressedSize = size;
+          return theEntries[aPos].getLastModified();
         }
-        void setEncrypted(bool encrypt)
-        {
-          encrypted = encrypt;
-        }
-        int getCompressionLevel()
-        {
-          return compressionLevel;
-        }
-        int getCompressedSize()
-        {
-          return compressedSize;
-        }
-        int getUncompressedSize()
-        {
-          return uncompressedSize;
-        }
-        bool isEncrypted()
-        {
-          return encrypted;
-        }
-        void insertEntry(ArchiveEntry aEntry)
-        {
-          entryList.push_back(aEntry);
-        }
-        Item getTree();
 
       };
 
-      static void 
-        processEntries(zorba::Item entries_node, ArchiveEntries& entries);
-
-    protected:
       static zorba::Item
       getOneItem(const Arguments_t& aArgs, int aIndex);
+
+#ifdef WIN32
+      static long
+#else
+      static ssize_t
+#endif    
+      writeStream(struct archive *a, void *client_data, const void *buff, size_t n);
+
+      static int
+      closeStream(struct archive *a, void *client_data);
 
     public:
 
@@ -272,6 +222,34 @@ namespace zorba { namespace archive {
  ******************************************************************************/
   class CreateFunction : public ArchiveFunction{
     public:
+
+      class ArchiveCompressor
+      {
+        protected:
+
+          ArchiveEntries *theArchiveEntries;
+          struct archive *theArchive;
+          struct archive_entry *theEntry;
+          std::stringstream* theStream;
+          std::istream* theFileStream;
+          char* theBuffer;
+          
+
+        public:
+          
+          ArchiveCompressor(zorba::Iterator_t aEntries);
+
+          ~ArchiveCompressor();
+
+          void open();
+
+          void close();
+
+          bool compress(zorba::Iterator_t aFiles);
+
+          std::stringstream* getStream() const;
+      };
+
       CreateFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
       virtual ~CreateFunction(){}
