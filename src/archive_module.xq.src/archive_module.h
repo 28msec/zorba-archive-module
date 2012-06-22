@@ -55,6 +55,9 @@ namespace zorba { namespace archive {
       static zorba::Item
       createDateTimeItem(time_t&);
 
+      static void
+      parseDateTimeItem(const zorba::Item& i, time_t&);
+
   };
 
 

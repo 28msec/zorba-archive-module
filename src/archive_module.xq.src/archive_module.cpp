@@ -14,6 +14,10 @@
 #include "archive.h"
 #include "archive_entry.h"
 
+#include <sys/timeb.h>
+#ifdef UNIX
+#  include <sys/time.h>
+#endif
 #ifdef WIN32
 #  include <MMSystem.h>
 #endif
@@ -107,6 +111,24 @@ namespace zorba { namespace archive {
     return lModifiedItem;
   }
 
+  void
+  ArchiveModule::parseDateTimeItem(const zorba::Item& i, time_t& t)
+  {
+    const char* lTime = i.getStringValue().c_str();
+
+    struct tm tm;
+    memset(&tm, 0, sizeof(struct tm));
+
+    char* lTmp = strptime(lTime, "%Y-%m-%dT%T", &tm);
+    if (lTmp != lTime + 19)
+    {
+      std::ostringstream lMsg;
+      lMsg << i.getStringValue()
+        << ": invalid value for last-modified attribute ";
+      ArchiveFunction::throwError("ARCH0003", lMsg.str().c_str());
+    }
+  }
+
 /*******************************************************************************
  ******************************************************************************/
   ArchiveFunction::ArchiveFunction(const ArchiveModule* aModule)
@@ -119,9 +141,17 @@ namespace zorba { namespace archive {
   }
 
   ArchiveFunction::ArchiveEntry::ArchiveEntry()
-    : theEncoding("UTF-8"),
-      theLastModified(0) 
+    : theEncoding("UTF-8")
   {
+    // use current time as a default for each entry
+#if defined (WIN32)
+    struct _timeb timebuffer;
+    _ftime_s( &timebuffer );
+#else
+    struct timeb timebuffer;
+    ftime( &timebuffer );
+#endif
+    theLastModified = timebuffer.time;
   }
 
   void
@@ -141,7 +171,7 @@ namespace zorba { namespace archive {
 
         if (lAttrName.getLocalName() == "last-modified")
         {
-          // TODO parse item to time_t
+          ArchiveModule::parseDateTimeItem(lAttr, theLastModified);
         }
         else if (lAttrName.getLocalName() == "encoding")
         {
@@ -547,23 +577,25 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
         "ARCH9999", "internal error (couldn't create archive)");
 
     setOptions(aOptions);
-        
     
     zorba::Item lFile;
     aFiles->open();
 
-    for (std::vector<ArchiveEntry>::const_iterator lIter = aEntries.begin();
-         lIter != aEntries.end();
-         ++lIter)
+    for (size_t i = 0; i < aEntries.size(); ++i)
     {
       if (!aFiles->next(lFile))
       {
-        // TODO raise error
+        std::ostringstream lMsg;
+        lMsg << "number of entries (" << aEntries.size()
+          << ") doesn't match number of content arguments (" << i << ")";
+        throwError("ARCH0001", lMsg.str().c_str());
       }
 
-      const ArchiveEntry& lEntry = *lIter;
+      const ArchiveEntry& lEntry = aEntries[i];
 
       archive_entry_set_pathname(theEntry, lEntry.getEntryPath().c_str());
+
+      archive_entry_set_mtime(theEntry, lEntry.getLastModified(), 0);
 
       // TODO: modified to allow the creation of empty directories
       archive_entry_set_filetype(theEntry, AE_IFREG);
@@ -643,6 +675,14 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
        
       archive_entry_clear(theEntry);
       archive_write_finish_entry(theArchive);
+    }
+
+    if (aFiles->next(lFile))
+    {
+      std::ostringstream lMsg;
+      lMsg << "number of entries (" << aEntries.size()
+        << ") less than number of content arguments";
+      throwError("ARCH0001", lMsg.str().c_str());
     }
 
     aFiles->close();
