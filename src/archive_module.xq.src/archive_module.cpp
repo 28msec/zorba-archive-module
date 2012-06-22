@@ -152,7 +152,7 @@ namespace zorba { namespace archive {
   }
 
   ArchiveFunction::ArchiveOptions::ArchiveOptions()
-    : theAlgorithm("DEFLATE"),
+    : theAlgorithm("NONE"),
       theFormat("ZIP"),
       theCompressionLevel(4)
   {}
@@ -284,12 +284,120 @@ namespace zorba { namespace archive {
       case ARCHIVE_COMPRESSION_GZIP: return "GZIP";
       case ARCHIVE_COMPRESSION_BZIP2: return "BZIP2";
       case ARCHIVE_COMPRESSION_COMPRESS: return "COMPRESS";
-      case ARCHIVE_COMPRESSION_PROGRAM: return "PROGRAM";
       case ARCHIVE_COMPRESSION_LZMA: return "LZMA";
       case ARCHIVE_COMPRESSION_XZ: return "XZ";
       case ARCHIVE_COMPRESSION_UU: return "UU";
       case ARCHIVE_COMPRESSION_RPM: return "RPM";
       default: return "";
+    }
+  }
+
+  int
+  ArchiveFunction::formatCode(const std::string& f)
+  {
+    if (f == "CPIO")
+    {
+      return ARCHIVE_FORMAT_CPIO;
+    }
+    else if (f == "SHAR")
+    {
+      return ARCHIVE_FORMAT_SHAR;
+    }
+    else if (f == "TAR")
+    {
+      return ARCHIVE_FORMAT_TAR;
+    }
+    else if (f == "ISO9660")
+    {
+      return ARCHIVE_FORMAT_ISO9660;
+    }
+    else if (f == "ZIP")
+    {
+      return ARCHIVE_FORMAT_ZIP;
+    }
+    else if (f == "EMPTY")
+    {
+      return ARCHIVE_FORMAT_EMPTY;
+    }
+    else if (f == "AR")
+    {
+      return ARCHIVE_FORMAT_AR;
+    }
+    else if (f == "MTREE")
+    {
+      return ARCHIVE_FORMAT_MTREE;
+    }
+    else if (f == "RAW")
+    {
+      return ARCHIVE_FORMAT_RAW;
+    }
+    else if (f == "XAR")
+    {
+      return ARCHIVE_FORMAT_XAR;
+    }
+    else
+    {
+      std::ostringstream lMsg;
+      lMsg << f << ": archive format not supported";
+      throwError("ARCH0002", lMsg.str().c_str());
+    }
+    return 0;
+  }
+
+  int
+  ArchiveFunction::compressionCode(const std::string& c)
+  {
+    if (c == "NONE")
+    {
+      return ARCHIVE_COMPRESSION_NONE;
+    }
+    else if (c == "GZIP")
+    {
+      return ARCHIVE_COMPRESSION_GZIP;
+    }
+    else if (c == "BZIP2")
+    {
+      return ARCHIVE_COMPRESSION_BZIP2;
+    }
+    else if (c == "COMPRESS")
+    {
+      return ARCHIVE_COMPRESSION_COMPRESS;
+    }
+    else if (c == "LZMA")
+    {
+      return ARCHIVE_COMPRESSION_LZMA;
+    }
+    else if (c == "XZ")
+    {
+      return ARCHIVE_COMPRESSION_XZ;
+    }
+    else
+    {
+      std::ostringstream lMsg;
+      lMsg << c << ": compression algorithm not supported";
+      throwError("ARCH0002", lMsg.str().c_str());
+    }
+    return 0;
+  }
+
+  void
+  ArchiveFunction::setArchiveCompression(struct archive* a, int c)
+  {
+    switch (c)
+    {
+      case ARCHIVE_COMPRESSION_NONE:
+        archive_write_set_compression_none(a); break;
+      case ARCHIVE_COMPRESSION_GZIP:
+        archive_write_set_compression_gzip(a); break;
+      case ARCHIVE_COMPRESSION_BZIP2:
+        archive_write_set_compression_bzip2(a); break;
+      case ARCHIVE_COMPRESSION_COMPRESS:
+        archive_write_set_compression_compress(a); break;
+      case ARCHIVE_COMPRESSION_LZMA:
+        archive_write_set_compression_lzma(a); break;
+      case ARCHIVE_COMPRESSION_XZ:
+        archive_write_set_compression_xz(a); break;
+      default: assert(false);
     }
   }
 
@@ -406,17 +514,6 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
       theEntry(0),
       theStream(new std::stringstream())
   {
-    theArchive = archive_write_new();
-
-    if (!theArchive)
-      ArchiveFunction::throwError(
-        "ARCH9999", "internal error (couldn't create archive)");
-        
-    archive_write_set_format_ustar(theArchive);
-    archive_write_set_compression_bzip2(theArchive);
-    archive_write_set_bytes_per_block(theArchive, 1024);
-    
-    archive_write_open(theArchive, this, 0, ArchiveFunction::writeStream, 0);
     theEntry = archive_entry_new();
   }
 
@@ -426,11 +523,32 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
   }
 
   void
+  CreateFunction::ArchiveCompressor::setOptions(const ArchiveOptions& aOptions)
+  {
+    int lFormatCode = formatCode(aOptions.getFormat().c_str());
+    archive_write_set_format(theArchive, lFormatCode);
+
+    int lCompressionCode = compressionCode(aOptions.getAlgorithm().c_str());
+    setArchiveCompression(theArchive, lCompressionCode);
+
+    archive_write_open(theArchive, this, 0, ArchiveFunction::writeStream, 0);
+  }
+
+  void
   CreateFunction::ArchiveCompressor::compress(
     const ArchiveOptions& aOptions,
     const std::vector<ArchiveEntry>& aEntries,
     zorba::Iterator_t& aFiles)
   {
+    theArchive = archive_write_new();
+
+    if (!theArchive)
+      ArchiveFunction::throwError(
+        "ARCH9999", "internal error (couldn't create archive)");
+
+    setOptions(aOptions);
+        
+    
     zorba::Item lFile;
     aFiles->open();
 

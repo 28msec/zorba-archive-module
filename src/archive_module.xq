@@ -42,11 +42,10 @@ xquery version "1.0";
  :   <li>GZIP</li>
  :   <li>BZIP2</li>
  :   <li>COMPRESS</li>
- :   <li>PROGRAM</li>
  :   <li>LZMA</li>
  :   <li>XZ</li>
- :   <li>UU</li>
- :   <li>RPM</li>
+ :   <li>UU (not supported for writing archives)</li>
+ :   <li>RPM (not supported for writing archives)</li>
  : </ul>
  : </p>
  : 

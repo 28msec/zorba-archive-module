@@ -219,6 +219,14 @@ namespace zorba { namespace archive {
       static std::string
         compressionName(int c);
 
+      static int
+        formatCode(const std::string&);
+
+      static int
+        compressionCode(const std::string&);
+
+      static void
+        setArchiveCompression(struct archive*, int c);
   };
 
 /*******************************************************************************
@@ -248,6 +256,10 @@ namespace zorba { namespace archive {
 
           static void
           releaseStream(std::istream* s) { delete s; }
+
+        protected:
+          void
+          setOptions(const ArchiveOptions& aOptions);
       };
 
       CreateFunction(const ArchiveModule* aModule)
