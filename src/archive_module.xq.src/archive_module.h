@@ -133,61 +133,58 @@ namespace zorba { namespace archive {
     protected:
       const ArchiveModule* theModule;
 
-      class ArchiveEntries
+    public:
+      class ArchiveOptions
       {
       protected:
-
-        class ArchiveEntry
-        {
-        protected:
-          String theEntryPath;
-          int theSize;
-          time_t theLastModified;
-
-        public:
-          ArchiveEntry();
-          ArchiveEntry(zorba::Item aEntry);
-          ~ArchiveEntry(){};
-
-          String getEntryPath() { return theEntryPath; }
-          int getSize() { return theSize; }
-          int getLastModified() { return theLastModified; }
-
-        };
-        
-        ArchiveEntry *theEntry;
-        std::vector<ArchiveEntry> theEntries;
-
-        void addEntry(zorba::Item aEntry)
-        {
-          theEntry = new ArchiveEntry(aEntry);
-          theEntries.push_back(*theEntry);
-          delete theEntry;
-        };
+        String theAlgorithm;
+        String theFormat;
+        short  theCompressionLevel;
 
       public:
-        ArchiveEntries();
-        ArchiveEntries(zorba::Iterator_t aEntriesIterator);
-        ~ArchiveEntries(){};
+        ArchiveOptions();
 
-        String 
-        getEntryPath(int aPos)
-        {
-          return theEntries[aPos].getEntryPath();
-        }
-        int 
-        getEntrySize(int aPos)
-        {
-          return theEntries[aPos].getSize();
-        }
-        int 
-        getEntryLastModified(int aPos)
-        {
-          return theEntries[aPos].getLastModified();
-        }
+        const String&
+        getAlgorithm() const { return theAlgorithm; }
 
+        const String&
+        getFormat() const { return theFormat; }
+
+        short
+        getCompressionLevel() const { return theCompressionLevel; }
+
+        void
+        setValues(Item&);
+
+      protected:
+        static String
+        getAttributeValue(
+            const Item& aNode,
+            const String& aAttrName = "value");
       };
 
+      class ArchiveEntry
+      {
+      protected:
+        String theEntryPath;
+        String theEncoding;
+        int theSize;
+        time_t theLastModified;
+
+      public:
+        ArchiveEntry();
+
+        const String& getEntryPath() const { return theEntryPath; }
+
+        const String& getEncoding() const { return theEncoding; }
+
+        int getSize() const { return theSize; }
+
+        const time_t& getLastModified() const { return theLastModified; }
+
+        void setValues(zorba::Item& aEntry);
+      };
+      
       static zorba::Item
       getOneItem(const Arguments_t& aArgs, int aIndex);
 
@@ -233,30 +230,28 @@ namespace zorba { namespace archive {
       {
         protected:
 
-          ArchiveEntries *theArchiveEntries;
           struct archive *theArchive;
           struct archive_entry *theEntry;
           std::stringstream* theStream;
-          std::istream* theFileStream;
-          char* theBuffer;
-          
 
         public:
-          
-          ArchiveCompressor(zorba::Iterator_t aEntries);
+          ArchiveCompressor();
 
           ~ArchiveCompressor();
 
-          void open();
+          void compress(
+            const ArchiveOptions& aOptions,
+            const std::vector<ArchiveEntry>& aEntries,
+            zorba::Iterator_t& aFiles);
 
-          void close();
+          std::stringstream* getStream();
 
-          bool compress(zorba::Iterator_t aFiles);
-
-          std::stringstream* getStream() const;
+          static void
+          releaseStream(std::istream* s) { delete s; }
       };
 
-      CreateFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
+      CreateFunction(const ArchiveModule* aModule)
+        : ArchiveFunction(aModule) {}
 
       virtual ~CreateFunction(){}
 
@@ -267,6 +262,7 @@ namespace zorba { namespace archive {
         evaluate(const Arguments_t&,
                  const zorba::StaticContext*,
                  const zorba::DynamicContext*) const;
+
   };
 
 /*******************************************************************************
@@ -592,5 +588,14 @@ namespace zorba { namespace archive {
   };
 
 } /* namespace archive  */ } /* namespace zorba */
+
+namespace std {
+
+ostream&
+operator<<(
+    ostream& out,
+    const zorba::archive::ArchiveFunction::ArchiveEntry& e);
+
+}
 
 #endif // _ORG_EXPATH_WWW_NS_ARCHIVE_H_
