@@ -85,7 +85,7 @@ declare option ver:module-version "1.0";
  : @error if an encoding is specified and the item is a base64Binary
  :)
 declare function a:create(
-  $entries as element(a:entry)*,
+  $entries as item()*,
   $contents as item()*)
     as xs:base64Binary external;
  
@@ -95,7 +95,7 @@ declare function a:create(
  : </a:options>
  :)
 declare function a:create(
-  $entries as element(a:entry)*,
+  $entries as item()*,
   $contents as item()*,
   $options as element(a:options))
     as xs:base64Binary external; 
@@ -205,7 +205,7 @@ declare function a:extract-binary($archive as xs:base64Binary, $entry-names as x
  :        of specified contents: count($entries) ne count($contents)
  :
  :)
-declare function a:update($archive as xs:base64Binary, $entries as element(entry)*, $contents as item()*)
+declare function a:update($archive as xs:base64Binary, $entries as item()*, $contents as item()*)
     as xs:base64Binary external;
   
 (:~
