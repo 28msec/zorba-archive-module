@@ -140,17 +140,17 @@ namespace zorba { namespace archive {
       class ArchiveOptions
       {
       protected:
-        String theAlgorithm;
-        String theFormat;
+        std::string theAlgorithm;
+        std::string theFormat;
         short  theCompressionLevel;
 
       public:
         ArchiveOptions();
 
-        const String&
+        const std::string&
         getAlgorithm() const { return theAlgorithm; }
 
-        const String&
+        const std::string&
         getFormat() const { return theFormat; }
 
         short
@@ -160,7 +160,7 @@ namespace zorba { namespace archive {
         setValues(Item&);
 
       protected:
-        static String
+        static std::string
         getAttributeValue(
             const Item& aNode,
             const String& aAttrName = "value");

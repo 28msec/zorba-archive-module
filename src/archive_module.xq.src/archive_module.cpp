@@ -176,6 +176,16 @@ namespace zorba { namespace archive {
         else if (lAttrName.getLocalName() == "encoding")
         {
           theEncoding = lAttr.getStringValue();
+          std::transform(
+              theEncoding.begin(), theEncoding.end(),
+              theEncoding.begin(), ::toupper);
+          if (!transcode::is_supported(theEncoding.c_str()))
+          {
+            std::ostringstream lMsg;
+            lMsg << theEncoding << ": unsupported encoding";
+              
+            throwError("ARCH0004", lMsg.str().c_str());
+          }
         }
       }
     }
@@ -187,7 +197,7 @@ namespace zorba { namespace archive {
       theCompressionLevel(4)
   {}
 
-  String
+  std::string
   ArchiveFunction::ArchiveOptions::getAttributeValue(
       const Item& aNode,
       const String& aAttrName)
@@ -203,7 +213,9 @@ namespace zorba { namespace archive {
 
       if (lAttrName.getLocalName() == aAttrName)
       {
-        return lAttr.getStringValue();
+        std::string lTmp = lAttr.getStringValue().c_str();
+        std::transform(lTmp.begin(), lTmp.end(), lTmp.begin(), ::toupper);
+        return lTmp;
       }
     }
     return "";
@@ -228,7 +240,7 @@ namespace zorba { namespace archive {
       }
       else if (lOptionName.getLocalName() == "format")
       {
-        theAlgorithm = getAttributeValue(lOption);
+        theFormat = getAttributeValue(lOption);
       }
       else if (lOptionName.getLocalName() == "compression")
       {
@@ -335,7 +347,7 @@ namespace zorba { namespace archive {
     }
     else if (f == "TAR")
     {
-      return ARCHIVE_FORMAT_TAR;
+      return ARCHIVE_FORMAT_TAR_USTAR;
     }
     else if (f == "ISO9660")
     {
@@ -413,22 +425,24 @@ namespace zorba { namespace archive {
   void
   ArchiveFunction::setArchiveCompression(struct archive* a, int c)
   {
+    int lErr = 0;
     switch (c)
     {
       case ARCHIVE_COMPRESSION_NONE:
-        archive_write_set_compression_none(a); break;
+        lErr = archive_write_set_compression_none(a); break;
       case ARCHIVE_COMPRESSION_GZIP:
-        archive_write_set_compression_gzip(a); break;
+        lErr = archive_write_set_compression_gzip(a); break;
       case ARCHIVE_COMPRESSION_BZIP2:
-        archive_write_set_compression_bzip2(a); break;
+        lErr = archive_write_set_compression_bzip2(a); break;
       case ARCHIVE_COMPRESSION_COMPRESS:
-        archive_write_set_compression_compress(a); break;
+        lErr = archive_write_set_compression_compress(a); break;
       case ARCHIVE_COMPRESSION_LZMA:
-        archive_write_set_compression_lzma(a); break;
+        lErr = archive_write_set_compression_lzma(a); break;
       case ARCHIVE_COMPRESSION_XZ:
-        archive_write_set_compression_xz(a); break;
+        lErr = archive_write_set_compression_xz(a); break;
       default: assert(false);
     }
+    ArchiveFunction::checkForError(lErr, 0, a);
   }
 
 #ifdef WIN32
@@ -556,12 +570,15 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
   CreateFunction::ArchiveCompressor::setOptions(const ArchiveOptions& aOptions)
   {
     int lFormatCode = formatCode(aOptions.getFormat().c_str());
-    archive_write_set_format(theArchive, lFormatCode);
+    int lErr = archive_write_set_format(theArchive, lFormatCode);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
 
     int lCompressionCode = compressionCode(aOptions.getAlgorithm().c_str());
     setArchiveCompression(theArchive, lCompressionCode);
 
-    archive_write_open(theArchive, this, 0, ArchiveFunction::writeStream, 0);
+    lErr = archive_write_open(
+        theArchive, this, 0, ArchiveFunction::writeStream, 0);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
   }
 
   void
