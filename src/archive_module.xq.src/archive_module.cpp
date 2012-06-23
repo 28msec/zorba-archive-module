@@ -828,6 +828,7 @@ namespace zorba { namespace archive {
 
     aFiles->close();
 	  archive_write_close(theArchive);
+	  archive_write_finish(theArchive);
   }
 
 
