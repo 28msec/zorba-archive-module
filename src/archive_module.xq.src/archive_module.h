@@ -88,6 +88,9 @@ namespace zorba { namespace archive {
 
           CallbackData    theData;
 
+          // needed if theArchiveItem is not streamable an needs to be decoded
+          zorba::String   theDecodedData;
+
           zorba::ItemFactory* theFactory;
 
         public:
@@ -234,7 +237,8 @@ namespace zorba { namespace archive {
 
 /*******************************************************************************
  ******************************************************************************/
-  class CreateFunction : public ArchiveFunction{
+  class CreateFunction : public ArchiveFunction
+  {
     public:
 
       class ArchiveCompressor
@@ -255,10 +259,32 @@ namespace zorba { namespace archive {
             const std::vector<ArchiveEntry>& aEntries,
             zorba::Iterator_t& aFiles);
 
-          std::stringstream* getStream();
+          std::stringstream* getResultStream();
 
           static void
           releaseStream(std::istream* s) { delete s; }
+
+      protected:
+        bool
+        getStream(
+            const ArchiveEntry& aEntry,
+            zorba::Item& aFile,
+            std::istream*& aResStream,
+            uint64_t& aResFileSize) const;
+
+        bool
+        getStreamForString(
+            const zorba::String& aEncoding,
+            zorba::Item& aFile,
+            std::istream*& aResStream,
+            uint64_t& aResFileSize) const;
+
+        bool
+        getStreamForBase64(
+            zorba::Item& aFile,
+            std::istream*& aResStream,
+            uint64_t& aResFileSize) const;
+
 
         protected:
           void
@@ -277,7 +303,6 @@ namespace zorba { namespace archive {
         evaluate(const Arguments_t&,
                  const zorba::StaticContext*,
                  const zorba::DynamicContext*) const;
-
   };
 
 /*******************************************************************************

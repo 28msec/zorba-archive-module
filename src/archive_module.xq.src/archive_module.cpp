@@ -4,6 +4,8 @@
 #include <zorba/empty_sequence.h>
 #include <zorba/user_exception.h>
 #include <zorba/transcode_stream.h>
+#include <zorba/base64_stream.h>
+#include <zorba/base64.h>
 #include <stdio.h>
 #include <string>
 #include <cassert>
@@ -244,7 +246,8 @@ namespace zorba { namespace archive {
       }
       else if (lOptionName.getLocalName() == "compression")
       {
-        // TODO get compression level and cast to short
+        std::string lTmp = getAttributeValue(lOption);
+        theCompressionLevel = atoi(lTmp.c_str());
       }
     }
   }
@@ -473,7 +476,7 @@ namespace zorba { namespace archive {
     return lStream->gcount(); 
   }
 
-ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
+  ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
     : theArchiveItem(a),
       theArchive(0),
       theFactory(Zorba::getInstance(0)->getItemFactory())
@@ -503,8 +506,10 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
       theData.theEnd = false;
       theData.thePos = 0;
 
-      // TODO do decoding of base64binary here if necessary
-      assert(!theArchiveItem.isEncoded());
+      if (theArchiveItem.isEncoded())
+      {
+        base64::attach(*theData.theStream);
+      }
 
 	    lErr = archive_read_open(
           theArchive, &theData, 0, ArchiveItemSequence::readStream, 0);
@@ -514,12 +519,24 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
     else
     {
       size_t lLen = 0;
-      char* lData = const_cast<char*>(theArchiveItem.getBase64BinaryValue(lLen));
-      // TODO do decoding of base64binary here if necessary
-      assert(!theArchiveItem.isEncoded());
+      char* lData = const_cast<char*>(
+          theArchiveItem.getBase64BinaryValue(lLen));
 
-      lErr = archive_read_open_memory(theArchive, lData, lLen);
-      ArchiveFunction::checkForError(lErr, 0, theArchive);
+      if (theArchiveItem.isEncoded())
+      {
+        zorba::String lEncoded(lData, lLen); 
+        theDecodedData = encoding::Base64::decode(lEncoded);
+        lLen = theDecodedData.size();
+        lErr = archive_read_open_memory(theArchive,
+            const_cast<char*>(theDecodedData.c_str()), lLen);
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+      }
+      else
+      {
+        lErr = archive_read_open_memory(theArchive, lData, lLen);
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+      }
+
     }
   }
 
@@ -546,7 +563,7 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
       static_cast<CreateFunction::ArchiveCompressor*>(func);
 
     const char * lBuf = static_cast<const char *>(buff);
-    lFunc->getStream()->write(lBuf, n);
+    lFunc->getResultStream()->write(lBuf, n);
   
     return n;
   }
@@ -581,6 +598,163 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
     ArchiveFunction::checkForError(lErr, 0, theArchive);
   }
 
+  bool
+  CreateFunction::ArchiveCompressor::getStreamForString(
+      const zorba::String& aEncoding,
+      zorba::Item& aFile,
+      std::istream*& aResStream,
+      uint64_t& aResFileSize) const
+  {
+    // 1. always need to materialize if transcoding is necessary
+    //    or stream is not seekable to compute resulting file size
+    if (aFile.isStreamable() &&
+        (!aFile.isSeekable() ||
+         transcode::is_necessary(aEncoding.c_str())))
+    {
+      aResStream = &aFile.getStream();
+
+      if (transcode::is_necessary(aEncoding.c_str()))
+      {
+        transcode::attach(*aResStream, aEncoding.c_str());
+      }
+
+      std::stringstream* lStream = new std::stringstream();
+
+      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+      while (aResStream->good())
+      {
+        aResStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+        lStream->write(lBuf, aResStream->gcount());
+        aResFileSize += aResStream->gcount();
+      }
+      aResStream = lStream;
+      return true; // delete after use
+    }
+    // 2. seekable and no transcoding is best cast
+    //    => compute size by seeking and return stream as-is
+    else if (aFile.isStreamable())
+    {
+      aResStream = &aFile.getStream();
+
+      aResStream->seekg(0, std::ios::end);
+      aResFileSize = aResStream->tellg();
+      aResStream->seekg(0, std::ios::beg);
+      return false;
+    }
+    // 3. non-streamable string
+    else
+    {
+      std::stringstream* lStream = new std::stringstream();
+
+      //    3.1 with transcoding
+      if (transcode::is_necessary(aEncoding.c_str()))
+      {
+        transcode::stream<std::istringstream> lTranscoder(
+            aEncoding.c_str(),
+            aFile.getStringValue().c_str()
+          );
+        char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+        while (lTranscoder.good())
+        {
+          lTranscoder.read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+          lStream->write(lBuf, lTranscoder.gcount());
+          aResFileSize += lTranscoder.gcount();
+        }
+      }
+      else // 3.2 without transcoding
+      {
+        zorba::String lString = aFile.getStringValue();
+        aResFileSize = lString.length();
+        lStream->write(lString.c_str(), aResFileSize);
+      }
+      aResStream = lStream;
+      return true;
+    }
+  }
+
+  bool
+  CreateFunction::ArchiveCompressor::getStreamForBase64(
+      zorba::Item& aFile,
+      std::istream*& aResStream,
+      uint64_t& aResFileSize) const
+  {
+    if (aFile.isStreamable() && aFile.isSeekable())
+    {
+      aResStream = &aFile.getStream();
+
+      aResStream->seekg(0, std::ios::end);
+      aResFileSize = aResStream->tellg();
+      aResStream->seekg(0, std::ios::beg);
+
+      if (aFile.isEncoded())
+      {
+        base64::attach(*aResStream);
+        // compute the size of the stream after base64 decoding
+        aResFileSize = ((aResFileSize / 4) + !!(aResFileSize % 4)) * 3;
+      }
+      return false;
+    }
+    else
+    {
+      std::stringstream* lStream = new std::stringstream();
+
+      size_t lResFileSize;
+      const char* lBinValue = aFile.getBase64BinaryValue(lResFileSize);
+
+      if (aFile.isEncoded())
+      {
+        zorba::String lEncoded(lBinValue, lResFileSize);
+        zorba::String lDecoded =
+          zorba::encoding::Base64::decode(lEncoded);
+        lStream->write(lDecoded.c_str(), lDecoded.length());
+        aResFileSize = lDecoded.size();
+      }
+      else
+      {
+        lStream->write(lBinValue, lResFileSize);
+        aResFileSize = lResFileSize;
+      }
+      aResStream = lStream;
+      return true;
+    }
+  }
+
+  bool
+  CreateFunction::ArchiveCompressor::getStream(
+      const ArchiveEntry& aEntry,
+      zorba::Item& aFile,
+      std::istream*& aResStream,
+      uint64_t& aResFileSize) const
+  {
+    aResFileSize = 0;
+
+    switch (aFile.getTypeCode())
+    {
+      case store::XS_STRING:
+      {
+        const zorba::String& lEncoding = aEntry.getEncoding();
+
+        return getStreamForString(lEncoding, aFile, aResStream, aResFileSize);
+      }
+      case store::XS_BASE64BINARY:
+      {
+        return getStreamForBase64(aFile, aResStream, aResFileSize);
+      }
+      default:
+      {
+        String errNS("http://www.w3.org/2005/xqt-errors");
+        Item errQName = ArchiveModule::getItemFactory()->createQName(
+            errNS, "FORG0006");
+        std::ostringstream lMsg;
+        lMsg << aFile.getType().getStringValue()
+          << ": invalid content argument "
+          << "(xs:string or xs:base64binary)";
+        throw USER_EXCEPTION(errQName, lMsg.str());
+      }
+    }
+
+  }
+
   void
   CreateFunction::ArchiveCompressor::compress(
     const ArchiveOptions& aOptions,
@@ -610,88 +784,38 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
 
       const ArchiveEntry& lEntry = aEntries[i];
 
+      std::istream* lStream;
+      bool lDeleteStream;
+      uint64_t lFileSize;
+
+      lDeleteStream = getStream(
+          lEntry, lFile, lStream, lFileSize);
+
       archive_entry_set_pathname(theEntry, lEntry.getEntryPath().c_str());
-
       archive_entry_set_mtime(theEntry, lEntry.getLastModified(), 0);
-
       // TODO: modified to allow the creation of empty directories
       archive_entry_set_filetype(theEntry, AE_IFREG);
-
       // TODO: specifies the permits of a file
       archive_entry_set_perm(theEntry, 0644);
-
-      std::auto_ptr<std::istream> lStream(0);
-      bool lDeleteStream = false;
-      uint64_t lFileSize = 0;
-      char buf[ZORBA_ARCHIVE_MAX_READ_BUF];
-
-      switch (lFile.getTypeCode())
-      {
-        case store::XS_STRING:
-          {
-            if (lFile.isStreamable())
-            {
-              if (lFile.isSeekable())
-              {
-                lStream.reset(&lFile.getStream());
-                lStream->seekg(0, std::ios::end);
-                lFileSize = lStream->tellg();
-                lStream->seekg(0, std::ios::beg);
-              }
-              else
-              {
-#if 0
-                lStream.reset(new std::stringstream());
-                std::istream& lTmp = lFile.getStream();
-                while (!lTmp.eof())
-                {
-                  lTmp.read(buf, ZORBA_ARCHIVE_MAX_READ_BUF);
-                  (*lStream).write(buf, lTmp.gcount());
-                  lFileSize += lTmp.gcount();
-                }
-                lDeleteStream = true;
-#endif
-              }
-            }
-            else
-            {
-            }
-          }
-          break;
-        case store::XS_BASE64BINARY:
-          {
-            if (lFile.isStreamable())
-            {
-              if (lFile.isSeekable())
-              {
-                lStream.reset(&lFile.getStream());
-              }
-              else
-              {
-              }
-            }
-          }
-          break;
-        default: assert(false);
-      }
-
       archive_entry_set_size(theEntry, lFileSize);
 
       archive_write_header(theArchive, theEntry);
 
+      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
       while (lStream->good())
       {
-        lStream->read(buf, ZORBA_ARCHIVE_MAX_READ_BUF);
-        archive_write_data(theArchive, buf, lStream->gcount());
+        lStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+        archive_write_data(theArchive, lBuf, lStream->gcount());
       }
 
-      if (!lDeleteStream)
-      {
-        lStream.release();
-      }
-       
       archive_entry_clear(theEntry);
       archive_write_finish_entry(theArchive);
+
+      if (lDeleteStream)
+      {
+        delete lStream;
+        lStream = 0;
+      }
     }
 
     if (aFiles->next(lFile))
@@ -708,7 +832,7 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
 
 
   std::stringstream*
-    CreateFunction::ArchiveCompressor::getStream()
+  CreateFunction::ArchiveCompressor::getResultStream()
   {
     return theStream;
   }
@@ -730,7 +854,6 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
       {
         lEntries.resize(lEntries.size() + 1);
         lEntries.back().setValues(lEntry);
-        std::cout << lEntries.back() << std::endl;
       }
       lEntriesIter->close();
     }
@@ -750,7 +873,7 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
 
     zorba::Item lRes = theModule->getItemFactory()->
       createStreamableBase64Binary(
-        *lArchive.getStream(),
+        *lArchive.getResultStream(),
         &(CreateFunction::ArchiveCompressor::releaseStream),
         true, // seekable
         false // not encoded
@@ -759,8 +882,8 @@ ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
   }
 
 
-/*******************************************************************************************
- *******************************************************************************************/
+/*******************************************************************************
+ ******************************************************************************/
   zorba::ItemSequence_t
   EntriesFunction::evaluate(
     const Arguments_t& aArgs,

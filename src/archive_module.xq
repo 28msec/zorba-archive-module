@@ -61,27 +61,24 @@ declare namespace ver = "http://www.zorba-xquery.com/options/versioning";
 declare option ver:module-version "1.0";
   
 (:~
- : Create a new archive according to the given spec.
- : The contents can be string and base64Binary items.
+ : Creates a new ZIP archive out of the given entries and contents.
+ : 
+ : <p>The parameters $entries and $contents have the same meaning as for
+ : the function a:create with three arguments.</p>
  :
- : Example:
- : <!-- specify compression level (0 = uncompressed) -->
- : <a:entry last-modified="" compression-level="0">
- :   myfile.txt
- : </a:entry>
- : <!-- specify encoding for text entries -->
- : <a:entry encoding="Shift_JIS">
- :   dir/myfile.xml
- : </a:entry>
- : <a:entry>
- :   dir/dir2/image.png
- : </a:entry>
+ : @param $entries the metadata for the entries in the archive. Each entry
+ :   can be of type xs:string or an element with name a:entry.
+ : @param $contents the content for the archive. Each item in the sequence
+ :   can be of type xs:string or xs:base64Binary.
  :
- : @return a base64Binary 
+ : @return the generated archive as xs:base64Binary
  :
- : @error if the number of entry elements differs from the number
- :        of specified contents: count($entries) ne count($contents)
- : @error if an encoding is specified and the item is a base64Binary
+ : @error a:ARCH0001 if the number of entry elements differs from the number
+ :        of items in the $contents sequence: count($entries) ne count($contents)
+ : @error a:ARCH0003 if a value for an entry element is invalid
+ : @error a:ARCH0004 if a given encoding is invalid or not supported
+ : @error err:FORG0006 if an item in the contents sequence is not of type xs:string
+ :   or xs:base64Binary
  :)
 declare function a:create(
   $entries as item()*,
@@ -89,9 +86,65 @@ declare function a:create(
     as xs:base64Binary external;
  
 (:~
- : <a:options archive-format="zip">
- :   <a:algorithm value="stored"/>
- : </a:options>
+ : Creates a new archive out of the given entries and contents.
+ :
+ : <p>The $entries arguments provides metadata for each entry in the archive.
+ : For example, the name of the entry (mandatory) or the last-modified date
+ : (optional). An entry can either be of type xs:string to describe the entry
+ : name or of type xs:base64Binary to provide additional metadata.</p>
+ :
+ : <p>The $contents sequence provides the data (xs:string or xs:base64Binary) for
+ : the entries that should be included in the archive. Its length needs to
+ : match the length of the $entries sequence (a:ARCH0001). All items of type
+ : xs:base64Binary are decoded before being added to the archive.</p>
+ :
+ : <p>For each entry, the name, last-modified date and time, and compression-level
+ : can be specified. In addition, an encoding can be specified which is used to
+ : store entries of type xs:string. If no last-modified attribute is given, the
+ : default is the current date and time.</p>
+ :
+ : <p>For example, the following sequence may be used to describe an archive
+ : containing three elemenets:
+ : <pre>
+ : &lt;a:entry last-modified="{fn:current-dateTime()}">myfile.txt&lt;/a:entry>
+ : &lt;a:entry encoding="ISO-8859-1">dir/myfile.xml&lt;/a:entry>
+ : &lt;a:entry compression-level="1">dir/dir2/image.png&lt;/a:entry>
+ : </pre>
+ : </p>
+ :
+ : <p>The $options argument may be used to describe general options for the
+ : archive. For example, the archive format (e.g. ZIP or TAR) or the compression
+ : algorithm that should be used (e.g. GZIP).</p>
+
+ : <p>For example, the following option element can be used to create a ZIP
+ : archive:
+ : <pre>
+ : &lt;archive:options>
+ :   &lt;archive:format value="ZIP"/>
+ :   &lt;archive:algorithm value="DEFLATE"/>
+ : &lt;/archive:options>
+ : </pre>
+ : </p>
+ :
+ : <p>The result of the function is the generated archive as a item of type
+ : xs:base64Binary.</p>
+ :
+ :
+ : @param $entries the metadata for the entries in the archive. Each entry
+ :   can be of type xs:string or an element with name a:entry.
+ : @param $contents the content for the archive. Each item in the sequence
+ :   can be of type xs:string or xs:base64Binary.
+ : @param $options the options used to generate the archive.
+ :
+ : @return the generated archive as xs:base64Binary
+ :
+ : @error a:ARCH0001 if the number of entry elements differs from the number
+ :        of items in the $contents sequence: count($entries) ne count($contents)
+ : @error a:ARCH0002 if the options argument contains invalid values
+ : @error a:ARCH0003 if a value for an entry element is invalid
+ : @error a:ARCH0004 if a given encoding is invalid or not supported
+ : @error err:FORG0006 if an item in the contents sequence is not of type xs:string
+ :   or xs:base64Binary
  :)
 declare function a:create(
   $entries as item()*,
@@ -135,7 +188,7 @@ declare function a:extract-text($archive as xs:base64Binary)
  : The default encoding used to read the string is UTF-8.
  :
  : @param $archive the archive to extract the entries from as xs:base64Binary
- : @param $entry-names a sequence of entry names that should be extracted
+ : @param $entry-names a sequence of names for entries which should be extracted
  :
  : @return a sequence of strings for the given sequence of names or the
  :   empty sequence if no entries match the given names.
@@ -184,7 +237,7 @@ declare function a:extract-binary($archive as xs:base64Binary)
  : Returns the entries identified by the given paths from the archive
  : as base64Binary.
  :
- : @param $entry-names a sequence of entry names that should be extracted
+ : @param $entry-names a sequence of names for entries which should be extracted
  :
  : @return a sequence of xs:base64Binary itmes for the given sequence of names
  :  or the empty sequence if no entries match the given names.
