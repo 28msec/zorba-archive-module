@@ -10,6 +10,7 @@
 #include <string>
 #include <cassert>
 
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <sys/types.h>
@@ -21,6 +22,7 @@
 #  include <sys/time.h>
 #endif
 #ifdef WIN32
+#  include "strptime.h"
 #  include <MMSystem.h>
 #endif
 
@@ -130,6 +132,7 @@ namespace zorba { namespace archive {
       ArchiveFunction::throwError("ARCH0003", lMsg.str().c_str());
     }
   }
+
 
 /*******************************************************************************
  ******************************************************************************/
