@@ -1,11 +1,31 @@
+# Copyright 2012 The FLWOR Foundation.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+# http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 IF (LIBARCHIVE_INCLUDE_DIR)
   SET (LIBARCHIVE_FIND_QUIETLY TRUE)
 ENDIF (LIBARCHIVE_INCLUDE_DIR)
 
-FIND_PATH (LIBARCHIVE_INCLUDE_DIR archive.h PATHS "/usr/local/include/libarchive/")
+FIND_PATH (
+  LIBARCHIVE_INCLUDE_DIR
+  archive.h
+  PATHS ${CCLIENT_INCLUDE_DIR} /usr/include/ /usr/local/include /opt/local/include )
 MARK_AS_ADVANCED (LIBARCHIVE_INCLUDE_DIR)
 
-FIND_LIBRARY (LIBARCHIVE_LIBRARY NAMES archive PATHS "/usr/local/lib/")
+FIND_LIBRARY (
+  LIBARCHIVE_LIBRARY
+  NAMES archive
+  PATHS /usr/lib /usr/local/lib /opt/local/lib)
 MARK_AS_ADVANCED (LIBARCHIVE_LIBRARY)
 
 IF (LIBARCHIVE_INCLUDE_DIR AND LIBARCHIVE_LIBRARY)
