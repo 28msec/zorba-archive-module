@@ -22,30 +22,10 @@ xquery version "1.0";
  : extract the values of several entries in a ZIP archive. Moreover,
  : there exist functions that allow to create or update archives.</p>
  :
- : <p>
- : The following archive formats are supported:
+ : <p>The following archive formats and compression algorithms are supported:
  : <ul>
- :   <li>ZIP</li>
- :   <li>TAR</li>
- :   <li>CPIO</li>
- :   <li>SHAR</li>
- :   <li>ISO9660</li>
- :   <li>AR</li>
- :   <li>MTREE</li>
- :   <li>RAW</li>
- :   <li>XAR</li>
- : </ul>
- :
- : Additionally, the modules supports the following compression algorithms:
- :
- : <ul>
- :   <li>GZIP</li>
- :   <li>BZIP2</li>
- :   <li>COMPRESS</li>
- :   <li>LZMA</li>
- :   <li>XZ</li>
- :   <li>UU (not supported for writing archives)</li>
- :   <li>RPM (not supported for writing archives)</li>
+ :   <li>ZIP (with compression DEFLATE or STORE)</li>
+ :   <li>TAR (with compression GZIP or BZIP2)</li>
  : </ul>
  : </p>
  : 
@@ -62,11 +42,13 @@ declare option ver:module-version "1.0";
   
 (:~
  : Creates a new ZIP archive out of the given entries and contents.
+ :
+ : <p>All entries are compressed with the DEFLATE compression algorithm.</p>
  : 
  : <p>The parameters $entries and $contents have the same meaning as for
  : the function a:create with three arguments.</p>
  :
- : @param $entries the metadata for the entries in the archive. Each entry
+ : @param $entries the meta data for the entries in the archive. Each entry
  :   can be of type xs:string or an element with name a:entry.
  : @param $contents the content for the archive. Each item in the sequence
  :   can be of type xs:string or xs:base64Binary.
@@ -88,10 +70,10 @@ declare function a:create(
 (:~
  : Creates a new archive out of the given entries and contents.
  :
- : <p>The $entries arguments provides metadata for each entry in the archive.
+ : <p>The $entries arguments provides meta data for each entry in the archive.
  : For example, the name of the entry (mandatory) or the last-modified date
  : (optional). An entry can either be of type xs:string to describe the entry
- : name or of type xs:base64Binary to provide additional metadata.</p>
+ : name or of type xs:base64Binary to provide additional meta data.</p>
  :
  : <p>The $contents sequence provides the data (xs:string or xs:base64Binary) for
  : the entries that should be included in the archive. Its length needs to
@@ -113,11 +95,9 @@ declare function a:create(
  : </p>
  :
  : <p>The $options argument may be used to describe general options for the
- : archive. For example, the archive format (e.g. ZIP or TAR) or the compression
- : algorithm that should be used (e.g. GZIP).</p>
-
- : <p>For example, the following option element can be used to create a ZIP
- : archive:
+ : archive.  For example, the following option element can be used to create a ZIP
+ : archive in which all entries are compressed with the DEFLATE compression
+ : algorithm:
  : <pre>
  : &lt;archive:options>
  :   &lt;archive:format value="ZIP"/>
@@ -130,7 +110,7 @@ declare function a:create(
  : xs:base64Binary.</p>
  :
  :
- : @param $entries the metadata for the entries in the archive. Each entry
+ : @param $entries the meta data for the entries in the archive. Each entry
  :   can be of type xs:string or an element with name a:entry.
  : @param $contents the content for the archive. Each item in the sequence
  :   can be of type xs:string or xs:base64Binary.
