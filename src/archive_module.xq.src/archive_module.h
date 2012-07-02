@@ -165,6 +165,7 @@ namespace zorba { namespace archive {
         short  theCompressionLevel;
 
       public:
+
         ArchiveOptions();
 
         const std::string&
@@ -191,6 +192,7 @@ namespace zorba { namespace archive {
       protected:
         String theEntryPath;
         String theEncoding;
+        bool theIsCompressed;
         int theSize;
         time_t theLastModified;
 
@@ -203,10 +205,67 @@ namespace zorba { namespace archive {
 
         int getSize() const { return theSize; }
 
+        int isCompressed() const { return theIsCompressed; }
+
         const time_t& getLastModified() const { return theLastModified; }
 
         void setValues(zorba::Item& aEntry);
       };
+
+      class ArchiveCompressor
+        {
+          protected:
+
+            struct archive *theArchive;
+            struct archive_entry *theEntry;
+            std::stringstream* theStream;
+
+          public:
+            ArchiveCompressor();
+
+            ~ArchiveCompressor();
+
+            void open(
+              const ArchiveOptions& aOptions);
+
+            void close();
+
+            void compress(
+              const std::vector<ArchiveEntry>& aEntries,
+              zorba::Iterator_t& aFiles);
+
+            std::stringstream* getResultStream();
+
+            static void
+            releaseStream(std::istream* s) { delete s; }
+
+        protected:
+          bool
+          getStream(
+              const ArchiveEntry& aEntry,
+              zorba::Item& aFile,
+              std::istream*& aResStream,
+              uint64_t& aResFileSize) const;
+
+          bool
+          getStreamForString(
+              const zorba::String& aEncoding,
+              zorba::Item& aFile,
+              std::istream*& aResStream,
+              uint64_t& aResFileSize) const;
+
+          bool
+          getStreamForBase64(
+              zorba::Item& aFile,
+              std::istream*& aResStream,
+              uint64_t& aResFileSize) const;
+
+
+          protected:
+            void
+            setOptions(const ArchiveOptions& aOptions);
+        };
+
       
       static zorba::Item
       getOneItem(const Arguments_t& aArgs, int aIndex);
@@ -257,57 +316,6 @@ namespace zorba { namespace archive {
   class CreateFunction : public ArchiveFunction
   {
     public:
-
-      class ArchiveCompressor
-      {
-        protected:
-
-          struct archive *theArchive;
-          struct archive_entry *theEntry;
-          std::stringstream* theStream;
-
-        public:
-          ArchiveCompressor();
-
-          ~ArchiveCompressor();
-
-          void compress(
-            const ArchiveOptions& aOptions,
-            const std::vector<ArchiveEntry>& aEntries,
-            zorba::Iterator_t& aFiles);
-
-          std::stringstream* getResultStream();
-
-          static void
-          releaseStream(std::istream* s) { delete s; }
-
-      protected:
-        bool
-        getStream(
-            const ArchiveEntry& aEntry,
-            zorba::Item& aFile,
-            std::istream*& aResStream,
-            uint64_t& aResFileSize) const;
-
-        bool
-        getStreamForString(
-            const zorba::String& aEncoding,
-            zorba::Item& aFile,
-            std::istream*& aResStream,
-            uint64_t& aResFileSize) const;
-
-        bool
-        getStreamForBase64(
-            zorba::Item& aFile,
-            std::istream*& aResStream,
-            uint64_t& aResFileSize) const;
-
-
-        protected:
-          void
-          setOptions(const ArchiveOptions& aOptions);
-      };
-
       CreateFunction(const ArchiveModule* aModule)
         : ArchiveFunction(aModule) {}
 
@@ -615,9 +623,48 @@ namespace zorba { namespace archive {
                  const zorba::DynamicContext*) const;
   };
 
-  class UpdateFunction : public ArchiveFunction{
+
+/*******************************************************************************
+ ******************************************************************************/
+
+  class UpdateFunction : public ExtractFunction{
+    protected:
+      class UpdateItemSequence : public ExtractItemSequence
+      {
+        public:
+          class UpdateIterator : public ExtractIterator
+          {
+            public:
+              UpdateIterator(
+                zorba::Item& aArchive,
+                ExtractItemSequence::EntryNameSet& aEntryNames)
+              : ExtractIterator(aArchive, aEntryNames, true) {}
+
+              virtual ~UpdateIterator() {}
+
+              bool 
+              next(zorba::Item& aItem);
+
+          };
+        public:
+          UpdateItemSequence(
+            zorba::Item& aArchive)
+          : ExtractItemSequence(aArchive, true)
+          {}
+
+          virtual ~UpdateItemSequence() {}
+
+          zorba::Iterator_t
+          getItreator()
+          {
+            return new UpdateIterator(
+              theArchive, theEntryNames);
+          }
+
+      };
+
     public:
-      UpdateFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
+      UpdateFunction(const ArchiveModule* aModule) : ExtractFunction(aModule) {}
 
       virtual ~UpdateFunction(){}
 
@@ -629,6 +676,11 @@ namespace zorba { namespace archive {
                  const zorba::StaticContext*,
                  const zorba::DynamicContext*) const;
   };
+
+
+/*******************************************************************************
+ ******************************************************************************/
+
   class DeleteFunction : public ArchiveFunction{
     public:
       DeleteFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}

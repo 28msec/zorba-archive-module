@@ -151,6 +151,7 @@ namespace zorba { namespace archive {
 
 
 /*******************************************************************************
+ ****************************** ArchiveFunction ********************************
  ******************************************************************************/
   ArchiveFunction::ArchiveFunction(const ArchiveModule* aModule)
     : theModule(aModule)
@@ -161,8 +162,14 @@ namespace zorba { namespace archive {
   {
   }
 
+
+  /******************
+  ** Archive Entry **
+  ******************/
+
   ArchiveFunction::ArchiveEntry::ArchiveEntry()
-    : theEncoding("UTF-8")
+    : theEncoding("UTF-8"),
+      theIsCompressed(true)
   {
     // use current time as a default for each entry
 #if defined (WIN32)
@@ -208,9 +215,31 @@ namespace zorba { namespace archive {
             throwError("ARCH0004", lMsg.str().c_str());
           }
         }
+        else if (lAttrName.getLocalName() == "compression")
+        {
+          if (lAttr.getStringValue() == "deflate")
+          {
+            theIsCompressed = true;
+          }
+          else if (lAttrName.getStringValue() == "stored")
+          {
+            theIsCompressed = false;
+          }
+          else
+          {
+            std::ostringstream lMsg;
+            lMsg << lAttrName.getStringValue() << ":unsuported compression";
+
+            throwError("ARCH0004", lMsg.str().c_str());
+          }
+        }
       }
     }
   }
+
+  /********************
+  ** Archive Options **
+  ********************/
 
   ArchiveFunction::ArchiveOptions::ArchiveOptions()
     : theAlgorithm("NONE"),
@@ -271,14 +300,300 @@ namespace zorba { namespace archive {
     }
   }
 
+  /************************
+  ** Archive Compressor ***
+  ************************/
+
+  ArchiveFunction::ArchiveCompressor::ArchiveCompressor()
+    : theArchive(0),
+      theEntry(0),
+      theStream(new std::stringstream())
+  {
+    theEntry = archive_entry_new();
+  }
+
+  ArchiveFunction::ArchiveCompressor::~ArchiveCompressor()
+  {
+    archive_entry_free(theEntry);
+  }
+
+  void
+  ArchiveFunction::ArchiveCompressor::setOptions(const ArchiveOptions& aOptions)
+  {
+    int lFormatCode = formatCode(aOptions.getFormat().c_str());
+    int lErr = archive_write_set_format(theArchive, lFormatCode);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
+
+    int lCompressionCode = compressionCode(aOptions.getAlgorithm().c_str());
+    setArchiveCompression(theArchive, lCompressionCode);
+
+    lErr = archive_write_open(
+        theArchive, this, 0, ArchiveFunction::writeStream, 0);
+    ArchiveFunction::checkForError(lErr, 0, theArchive);
+  }
+
+  bool
+  ArchiveFunction::ArchiveCompressor::getStreamForString(
+      const zorba::String& aEncoding,
+      zorba::Item& aFile,
+      std::istream*& aResStream,
+      uint64_t& aResFileSize) const
+  {
+    // 1. always need to materialize if transcoding is necessary
+    //    or stream is not seekable to compute resulting file size
+    if (aFile.isStreamable() &&
+        (!aFile.isSeekable() ||
+         transcode::is_necessary(aEncoding.c_str())))
+    {
+      aResStream = &aFile.getStream();
+
+      if (transcode::is_necessary(aEncoding.c_str()))
+      {
+        transcode::attach(*aResStream, aEncoding.c_str());
+      }
+
+      std::stringstream* lStream = new std::stringstream();
+
+      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+      while (aResStream->good())
+      {
+        aResStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+        lStream->write(lBuf, aResStream->gcount());
+        aResFileSize += aResStream->gcount();
+      }
+      aResStream = lStream;
+      return true; // delete after use
+    }
+    // 2. seekable and no transcoding is best cast
+    //    => compute size by seeking and return stream as-is
+    else if (aFile.isStreamable())
+    {
+      aResStream = &aFile.getStream();
+
+      aResStream->seekg(0, std::ios::end);
+      aResFileSize = aResStream->tellg();
+      aResStream->seekg(0, std::ios::beg);
+      return false;
+    }
+    // 3. non-streamable string
+    else
+    {
+      std::stringstream* lStream = new std::stringstream();
+
+      //    3.1 with transcoding
+      if (transcode::is_necessary(aEncoding.c_str()))
+      {
+        transcode::stream<std::istringstream> lTranscoder(
+            aEncoding.c_str(),
+            aFile.getStringValue().c_str()
+          );
+        char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+        while (lTranscoder.good())
+        {
+          lTranscoder.read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+          lStream->write(lBuf, lTranscoder.gcount());
+          aResFileSize += lTranscoder.gcount();
+        }
+      }
+      else // 3.2 without transcoding
+      {
+        zorba::String lString = aFile.getStringValue();
+        aResFileSize = lString.length();
+        lStream->write(lString.c_str(), aResFileSize);
+      }
+      aResStream = lStream;
+      return true;
+    }
+  }
+
+  bool
+  ArchiveFunction::ArchiveCompressor::getStreamForBase64(
+      zorba::Item& aFile,
+      std::istream*& aResStream,
+      uint64_t& aResFileSize) const
+  {
+    if (aFile.isStreamable() && aFile.isSeekable())
+    {
+      aResStream = &aFile.getStream();
+
+      aResStream->seekg(0, std::ios::end);
+      aResFileSize = aResStream->tellg();
+      aResStream->seekg(0, std::ios::beg);
+
+      if (aFile.isEncoded())
+      {
+        base64::attach(*aResStream);
+        // compute the size of the stream after base64 decoding
+        aResFileSize = ((aResFileSize / 4) + !!(aResFileSize % 4)) * 3;
+      }
+      return false;
+    }
+    else
+    {
+      std::stringstream* lStream = new std::stringstream();
+
+      size_t lResFileSize;
+      const char* lBinValue = aFile.getBase64BinaryValue(lResFileSize);
+
+      if (aFile.isEncoded())
+      {
+        zorba::String lEncoded(lBinValue, lResFileSize);
+        zorba::String lDecoded =
+          zorba::encoding::Base64::decode(lEncoded);
+        lStream->write(lDecoded.c_str(), lDecoded.length());
+        aResFileSize = lDecoded.size();
+      }
+      else
+      {
+        lStream->write(lBinValue, lResFileSize);
+        aResFileSize = lResFileSize;
+      }
+      aResStream = lStream;
+      return true;
+    }
+  }
+
+  bool
+  ArchiveFunction::ArchiveCompressor::getStream(
+      const ArchiveEntry& aEntry,
+      zorba::Item& aFile,
+      std::istream*& aResStream,
+      uint64_t& aResFileSize) const
+  {
+    aResFileSize = 0;
+
+    switch (aFile.getTypeCode())
+    {
+      case store::XS_STRING:
+      {
+        const zorba::String& lEncoding = aEntry.getEncoding();
+
+        return getStreamForString(lEncoding, aFile, aResStream, aResFileSize);
+      }
+      case store::XS_BASE64BINARY:
+      {
+        return getStreamForBase64(aFile, aResStream, aResFileSize);
+      }
+      default:
+      {
+        String errNS("http://www.w3.org/2005/xqt-errors");
+        Item errQName = ArchiveModule::getItemFactory()->createQName(
+            errNS, "FORG0006");
+        std::ostringstream lMsg;
+        lMsg << aFile.getType().getStringValue()
+          << ": invalid content argument "
+          << "(xs:string or xs:base64binary)";
+        throw USER_EXCEPTION(errQName, lMsg.str());
+      }
+    }
+
+  }
+
+  void
+  ArchiveFunction::ArchiveCompressor::open(
+    const ArchiveOptions& aOptions)
+  {
+    theArchive = archive_write_new();
+
+    if (!theArchive)
+      ArchiveFunction::throwError(
+        "ARCH9999", "internal error (couldn't create archive)");
+
+    setOptions(aOptions);
+  }
+
+  void
+  ArchiveFunction::ArchiveCompressor::compress(
+    const std::vector<ArchiveEntry>& aEntries,
+    zorba::Iterator_t& aFiles)
+  {  
+    zorba::Item lFile;
+    aFiles->open();
+
+    for (size_t i = 0; i < aEntries.size(); ++i)
+    {
+      if (!aFiles->next(lFile))
+      {
+        std::ostringstream lMsg;
+        lMsg << "number of entries (" << aEntries.size()
+          << ") doesn't match number of content arguments (" << i << ")";
+        throwError("ARCH0001", lMsg.str().c_str());
+      }
+
+      const ArchiveEntry& lEntry = aEntries[i];
+
+      std::istream* lStream;
+      bool lDeleteStream;
+      uint64_t lFileSize;
+
+      lDeleteStream = getStream(
+          lEntry, lFile, lStream, lFileSize);
+
+      archive_entry_set_pathname(theEntry, lEntry.getEntryPath().c_str());
+      archive_entry_set_mtime(theEntry, lEntry.getLastModified(), 0);
+      // TODO: modified to allow the creation of empty directories
+      archive_entry_set_filetype(theEntry, AE_IFREG);
+      // TODO: specifies the permits of a file
+      archive_entry_set_perm(theEntry, 0644);
+      archive_entry_set_size(theEntry, lFileSize);
+
+      archive_write_header(theArchive, theEntry);
+
+      if (lEntry.isCompressed())
+        archive_write_set_options(theArchive, "compression=9");
+      else
+        archive_write_set_options(theArchive, "compression=0");
+
+      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+      while (lStream->good())
+      {
+        lStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+        archive_write_data(theArchive, lBuf, lStream->gcount());
+      }
+
+      archive_entry_clear(theEntry);
+      archive_write_finish_entry(theArchive);
+
+      if (lDeleteStream)
+      {
+        delete lStream;
+        lStream = 0;
+      }
+    }
+
+    if (aFiles->next(lFile))
+    {
+      std::ostringstream lMsg;
+      lMsg << "number of entries (" << aEntries.size()
+        << ") less than number of content arguments";
+      throwError("ARCH0001", lMsg.str().c_str());
+    }
+
+    aFiles->close();
+  }
+
+  void
+  ArchiveFunction::ArchiveCompressor::close()
+  {
+	  archive_write_close(theArchive);
+	  archive_write_finish(theArchive);
+  }
+
+  std::stringstream*
+  ArchiveFunction::ArchiveCompressor::getResultStream()
+  {
+    return theStream;
+  }
+
+
   String 
-    ArchiveFunction::getURI() const
+  ArchiveFunction::getURI() const
   {
     return theModule->getURI();
   }
 
   void
-    ArchiveFunction::throwError(
+  ArchiveFunction::throwError(
         const char* aLocalName,
         const char* aErrorMessage)
   {
@@ -289,7 +604,7 @@ namespace zorba { namespace archive {
   }
 
   void
-    ArchiveFunction::checkForError(
+  ArchiveFunction::checkForError(
         int aErrNo,
         const char* aLocalName,
         struct archive *a)
@@ -589,274 +904,6 @@ namespace zorba { namespace archive {
 
 /*******************************************************************************
  ******************************************************************************/
-  CreateFunction::ArchiveCompressor::ArchiveCompressor()
-    : theArchive(0),
-      theEntry(0),
-      theStream(new std::stringstream())
-  {
-    theEntry = archive_entry_new();
-  }
-
-  CreateFunction::ArchiveCompressor::~ArchiveCompressor()
-  {
-    archive_entry_free(theEntry);
-  }
-
-  void
-  CreateFunction::ArchiveCompressor::setOptions(const ArchiveOptions& aOptions)
-  {
-    int lFormatCode = formatCode(aOptions.getFormat().c_str());
-    int lErr = archive_write_set_format(theArchive, lFormatCode);
-    ArchiveFunction::checkForError(lErr, 0, theArchive);
-
-    int lCompressionCode = compressionCode(aOptions.getAlgorithm().c_str());
-    setArchiveCompression(theArchive, lCompressionCode);
-
-    lErr = archive_write_open(
-        theArchive, this, 0, ArchiveFunction::writeStream, 0);
-    ArchiveFunction::checkForError(lErr, 0, theArchive);
-  }
-
-  bool
-  CreateFunction::ArchiveCompressor::getStreamForString(
-      const zorba::String& aEncoding,
-      zorba::Item& aFile,
-      std::istream*& aResStream,
-      uint64_t& aResFileSize) const
-  {
-    // 1. always need to materialize if transcoding is necessary
-    //    or stream is not seekable to compute resulting file size
-    if (aFile.isStreamable() &&
-        (!aFile.isSeekable() ||
-         transcode::is_necessary(aEncoding.c_str())))
-    {
-      aResStream = &aFile.getStream();
-
-      if (transcode::is_necessary(aEncoding.c_str()))
-      {
-        transcode::attach(*aResStream, aEncoding.c_str());
-      }
-
-      std::stringstream* lStream = new std::stringstream();
-
-      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
-      while (aResStream->good())
-      {
-        aResStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
-        lStream->write(lBuf, aResStream->gcount());
-        aResFileSize += aResStream->gcount();
-      }
-      aResStream = lStream;
-      return true; // delete after use
-    }
-    // 2. seekable and no transcoding is best cast
-    //    => compute size by seeking and return stream as-is
-    else if (aFile.isStreamable())
-    {
-      aResStream = &aFile.getStream();
-
-      aResStream->seekg(0, std::ios::end);
-      aResFileSize = aResStream->tellg();
-      aResStream->seekg(0, std::ios::beg);
-      return false;
-    }
-    // 3. non-streamable string
-    else
-    {
-      std::stringstream* lStream = new std::stringstream();
-
-      //    3.1 with transcoding
-      if (transcode::is_necessary(aEncoding.c_str()))
-      {
-        transcode::stream<std::istringstream> lTranscoder(
-            aEncoding.c_str(),
-            aFile.getStringValue().c_str()
-          );
-        char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
-        while (lTranscoder.good())
-        {
-          lTranscoder.read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
-          lStream->write(lBuf, lTranscoder.gcount());
-          aResFileSize += lTranscoder.gcount();
-        }
-      }
-      else // 3.2 without transcoding
-      {
-        zorba::String lString = aFile.getStringValue();
-        aResFileSize = lString.length();
-        lStream->write(lString.c_str(), aResFileSize);
-      }
-      aResStream = lStream;
-      return true;
-    }
-  }
-
-  bool
-  CreateFunction::ArchiveCompressor::getStreamForBase64(
-      zorba::Item& aFile,
-      std::istream*& aResStream,
-      uint64_t& aResFileSize) const
-  {
-    if (aFile.isStreamable() && aFile.isSeekable())
-    {
-      aResStream = &aFile.getStream();
-
-      aResStream->seekg(0, std::ios::end);
-      aResFileSize = aResStream->tellg();
-      aResStream->seekg(0, std::ios::beg);
-
-      if (aFile.isEncoded())
-      {
-        base64::attach(*aResStream);
-        // compute the size of the stream after base64 decoding
-        aResFileSize = ((aResFileSize / 4) + !!(aResFileSize % 4)) * 3;
-      }
-      return false;
-    }
-    else
-    {
-      std::stringstream* lStream = new std::stringstream();
-
-      size_t lResFileSize;
-      const char* lBinValue = aFile.getBase64BinaryValue(lResFileSize);
-
-      if (aFile.isEncoded())
-      {
-        zorba::String lEncoded(lBinValue, lResFileSize);
-        zorba::String lDecoded =
-          zorba::encoding::Base64::decode(lEncoded);
-        lStream->write(lDecoded.c_str(), lDecoded.length());
-        aResFileSize = lDecoded.size();
-      }
-      else
-      {
-        lStream->write(lBinValue, lResFileSize);
-        aResFileSize = lResFileSize;
-      }
-      aResStream = lStream;
-      return true;
-    }
-  }
-
-  bool
-  CreateFunction::ArchiveCompressor::getStream(
-      const ArchiveEntry& aEntry,
-      zorba::Item& aFile,
-      std::istream*& aResStream,
-      uint64_t& aResFileSize) const
-  {
-    aResFileSize = 0;
-
-    switch (aFile.getTypeCode())
-    {
-      case store::XS_STRING:
-      {
-        const zorba::String& lEncoding = aEntry.getEncoding();
-
-        return getStreamForString(lEncoding, aFile, aResStream, aResFileSize);
-      }
-      case store::XS_BASE64BINARY:
-      {
-        return getStreamForBase64(aFile, aResStream, aResFileSize);
-      }
-      default:
-      {
-        String errNS("http://www.w3.org/2005/xqt-errors");
-        Item errQName = ArchiveModule::getItemFactory()->createQName(
-            errNS, "FORG0006");
-        std::ostringstream lMsg;
-        lMsg << aFile.getType().getStringValue()
-          << ": invalid content argument "
-          << "(xs:string or xs:base64binary)";
-        throw USER_EXCEPTION(errQName, lMsg.str());
-      }
-    }
-
-  }
-
-  void
-  CreateFunction::ArchiveCompressor::compress(
-    const ArchiveOptions& aOptions,
-    const std::vector<ArchiveEntry>& aEntries,
-    zorba::Iterator_t& aFiles)
-  {
-    theArchive = archive_write_new();
-
-    if (!theArchive)
-      ArchiveFunction::throwError(
-        "ARCH9999", "internal error (couldn't create archive)");
-
-    setOptions(aOptions);
-    
-    zorba::Item lFile;
-    aFiles->open();
-
-    for (size_t i = 0; i < aEntries.size(); ++i)
-    {
-      if (!aFiles->next(lFile))
-      {
-        std::ostringstream lMsg;
-        lMsg << "number of entries (" << aEntries.size()
-          << ") doesn't match number of content arguments (" << i << ")";
-        throwError("ARCH0001", lMsg.str().c_str());
-      }
-
-      const ArchiveEntry& lEntry = aEntries[i];
-
-      std::istream* lStream;
-      bool lDeleteStream;
-      uint64_t lFileSize;
-
-      lDeleteStream = getStream(
-          lEntry, lFile, lStream, lFileSize);
-
-      archive_entry_set_pathname(theEntry, lEntry.getEntryPath().c_str());
-      archive_entry_set_mtime(theEntry, lEntry.getLastModified(), 0);
-      // TODO: modified to allow the creation of empty directories
-      archive_entry_set_filetype(theEntry, AE_IFREG);
-      // TODO: specifies the permits of a file
-      archive_entry_set_perm(theEntry, 0644);
-      archive_entry_set_size(theEntry, lFileSize);
-
-      archive_write_header(theArchive, theEntry);
-
-      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
-      while (lStream->good())
-      {
-        lStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
-        archive_write_data(theArchive, lBuf, lStream->gcount());
-      }
-
-      archive_entry_clear(theEntry);
-      archive_write_finish_entry(theArchive);
-
-      if (lDeleteStream)
-      {
-        delete lStream;
-        lStream = 0;
-      }
-    }
-
-    if (aFiles->next(lFile))
-    {
-      std::ostringstream lMsg;
-      lMsg << "number of entries (" << aEntries.size()
-        << ") less than number of content arguments";
-      throwError("ARCH0001", lMsg.str().c_str());
-    }
-
-    aFiles->close();
-	  archive_write_close(theArchive);
-	  archive_write_finish(theArchive);
-  }
-
-
-  std::stringstream*
-  CreateFunction::ArchiveCompressor::getResultStream()
-  {
-    return theStream;
-  }
-
   zorba::ItemSequence_t
     CreateFunction::evaluate(
       const Arguments_t& aArgs,
@@ -889,7 +936,9 @@ namespace zorba { namespace archive {
     ArchiveCompressor lArchive;
       
     zorba::Iterator_t lFileIter = aArgs[1]->getIterator();
-    lArchive.compress(lOptions, lEntries, lFileIter);
+    lArchive.open(lOptions);
+    lArchive.compress(lEntries, lFileIter);
+    lArchive.close();
 
     zorba::Item lRes = theModule->getItemFactory()->
       createStreamableBase64Binary(
