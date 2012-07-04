@@ -182,6 +182,23 @@ namespace zorba { namespace archive {
   }
 
   void
+  ArchiveFunction::ArchiveEntry::setValues(struct archive_entry* aEntry)
+  {
+    theEntryPath = archive_entry_pathname(aEntry);
+
+    if (archive_entry_size_is_set(aEntry))
+    {
+      //add a size variable
+    }
+
+    if (archive_entry_mtime_is_set(aEntry))
+    {
+      theLastModified = archive_entry_mtime(aEntry);
+    }
+    //check if it is encoded
+  }
+
+  void
   ArchiveFunction::ArchiveEntry::setValues(zorba::Item& aEntry)
   {
     theEntryPath = aEntry.getStringValue();
@@ -250,6 +267,17 @@ namespace zorba { namespace archive {
       }
     }
     return "";
+  }
+
+  void
+  ArchiveFunction::ArchiveOptions::setValues(struct archive* aArchive)
+  {
+    theAlgorithm = ArchiveFunction::compressionName(archive_compression(aArchive));
+    theFormat = ArchiveFunction::formatName(archive_format(aArchive));
+    theCompressionLevel = archive_compression(aArchive);
+
+    if(theFormat == "ZIP")
+      theAlgorithm = "DEFLATE";
   }
 
   void
@@ -502,16 +530,33 @@ namespace zorba { namespace archive {
       }
 
       const ArchiveEntry& lEntry = aEntries[i];
+      
+      compress(lEntry, lFile);
+    
+    }
 
+    if (aFiles->next(lFile))
+    {
+      std::ostringstream lMsg;
+      lMsg << "number of entries (" << aEntries.size()
+        << ") less than number of content arguments";
+      throwError("ARCH0001", lMsg.str().c_str());
+    }
+
+    aFiles->close();
+  }
+
+  void ArchiveFunction::ArchiveCompressor::compress(const ArchiveEntry& aEntry, Item aFile)
+  {
       std::istream* lStream;
       bool lDeleteStream;
       uint64_t lFileSize;
 
       lDeleteStream = getStream(
-          lEntry, lFile, lStream, lFileSize);
+          aEntry, aFile, lStream, lFileSize);
 
-      archive_entry_set_pathname(theEntry, lEntry.getEntryPath().c_str());
-      archive_entry_set_mtime(theEntry, lEntry.getLastModified(), 0);
+      archive_entry_set_pathname(theEntry, aEntry.getEntryPath().c_str());
+      archive_entry_set_mtime(theEntry, aEntry.getLastModified(), 0);
       // TODO: modified to allow the creation of empty directories
       archive_entry_set_filetype(theEntry, AE_IFREG);
       // TODO: specifies the permits of a file
@@ -535,17 +580,6 @@ namespace zorba { namespace archive {
         delete lStream;
         lStream = 0;
       }
-    }
-
-    if (aFiles->next(lFile))
-    {
-      std::ostringstream lMsg;
-      lMsg << "number of entries (" << aEntries.size()
-        << ") less than number of content arguments";
-      throwError("ARCH0001", lMsg.str().c_str());
-    }
-
-    aFiles->close();
   }
 
   void
@@ -869,8 +903,8 @@ namespace zorba { namespace archive {
       const void *buff,
       size_t n)
   {
-    CreateFunction::ArchiveCompressor* lFunc =
-      static_cast<CreateFunction::ArchiveCompressor*>(func);
+    ArchiveFunction::ArchiveCompressor* lFunc =
+      static_cast<ArchiveFunction::ArchiveCompressor*>(func);
 
     const char * lBuf = static_cast<const char *>(buff);
     lFunc->getResultStream()->write(lBuf, n);
@@ -919,7 +953,7 @@ namespace zorba { namespace archive {
     zorba::Item lRes = theModule->getItemFactory()->
       createStreamableBase64Binary(
         *lArchive.getResultStream(),
-        &(CreateFunction::ArchiveCompressor::releaseStream),
+        &(ArchiveFunction::ArchiveCompressor::releaseStream),
         true, // seekable
         false // not encoded
         );
@@ -1306,16 +1340,120 @@ namespace zorba { namespace archive {
 
 /*******************************************************************************************
  *******************************************************************************************/
- 
+  bool
+  UpdateFunction::UpdateItemSequence::UpdateIterator::next(
+    zorba::Item& aRes)
+  {
+    struct archive_entry *lEntry;
+
+    while(true)
+    {
+      int lErr = archive_read_next_header(theArchive, &lEntry);
+      
+      if (lErr == ARCHIVE_EOF) return false;
+
+      if (lErr != ARCHIVE_OK)
+      {
+        ArchiveFunction::checkForError(lErr, 0, theArchive);
+      }
+
+      if (theReturnAll) break;
+
+      //String lName = archive_entry_pathname(lEntry);
+      //TODO: Add a way to remove repeated files files
+
+    }
+
+    //form an ArchiveEntry with the entry
+    theEntry.reset(new ArchiveEntry());
+    theEntry->setValues(lEntry);
+
+
+    //read entry content
+    std::vector<unsigned char> lResult;
+
+    if (archive_entry_size_is_set(lEntry))
+    {
+      long long lSize = archive_entry_size(lEntry);
+      lResult.reserve(lSize);
+    }
+
+    std::vector<unsigned char> lBuf;
+    lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
+
+    //read entry into string
+    while (true)
+    {
+      int s = archive_read_data(
+        theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
+     
+      if (s == 0) break;
+
+      lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+    }
+
+    aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+
+    return true;
+  }
+
   zorba::ItemSequence_t
     UpdateFunction::evaluate(
       const Arguments_t& aArgs,
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
   {
-    throwError("ImplementationError", "Function not yet Implemented");
+    Item lArchive = getOneItem(aArgs, 0);
 
-    return ItemSequence_t(new EmptySequence());
+    std::vector<ArchiveEntry> lEntries;
+
+    {
+      Iterator_t lEntriesIter = aArgs[1]->getIterator();
+
+      zorba::Item lEntry;
+      lEntriesIter->open();
+      while (lEntriesIter->next(lEntry))
+      {
+        lEntries.resize(lEntries.size() + 1);
+        lEntries.back().setValues(lEntry);
+        //TODO Fill the EntrySetName of the read iterator
+      }
+      lEntriesIter->close();
+    }
+
+    ArchiveOptions lOptions;
+
+    zorba::Iterator_t lFileIter = aArgs[2]->getIterator();
+
+    std::auto_ptr<UpdateItemSequence> lSeq(
+      new UpdateItemSequence(lArchive, true));
+
+    ArchiveCompressor lResArchive;
+
+    //TODO: add a way to fill the options
+    lResArchive.open(lOptions);
+
+
+    Item lItem;
+    Iterator_t lSeqIter = lSeq->getIterator();
+    lSeqIter->open();
+    while (lSeqIter->next(lItem))
+    {
+      lResArchive.compress(*(lSeq->getEntry()), lItem);
+    }
+    lSeqIter->close();
+
+    lResArchive.compress(lEntries, lFileIter);
+    lResArchive.close();
+
+    Item lRes = theModule->getItemFactory()->
+      createStreamableBase64Binary(
+      *lResArchive.getResultStream(),
+      &(ArchiveFunction::ArchiveCompressor::releaseStream),
+      true, // seekable
+      false // no encoded
+      );
+    return ItemSequence_t(new SingletonItemSequence(lRes));
   }
 
 /*******************************************************************************************
