@@ -383,7 +383,7 @@ namespace zorba { namespace archive {
  ******************************************************************************/
   class ExtractFunction : public ArchiveFunction
   {
-    protected:
+    public:
       class ExtractItemSequence : public ArchiveItemSequence
       {
         public:
@@ -408,6 +408,8 @@ namespace zorba { namespace archive {
                 : ArchiveIterator(aArchive),
                   theEntryNames(aEntryNames),
                   theReturnAll(aReturnAll) {}
+
+              struct archive_entry* lookForHeader(bool aMatch);
 
               virtual ~ExtractIterator() {}
 
@@ -510,7 +512,7 @@ namespace zorba { namespace archive {
  ******************************************************************************/
   class ExtractBinaryFunction : public ExtractFunction
   {
-    protected:
+    public:
       class ExtractBinaryItemSequence : public ExtractItemSequence
       {
         public:
@@ -679,6 +681,68 @@ namespace zorba { namespace archive {
  ******************************************************************************/
 
   class DeleteFunction : public ArchiveFunction{
+     protected:
+      class DeleteItemSequence : public ExtractFunction::ExtractItemSequence
+      {
+        public:
+          class DeleteIterator : public ExtractFunction::ExtractItemSequence::ExtractIterator
+          {
+            //protected:
+            //  std::vector<ArchiveEntry>& theBlacklistedEntries;
+              
+            public:
+              DeleteIterator(zorba::Item& aArchive,
+              ExtractFunction::ExtractItemSequence::EntryNameSet& aEntryList):
+              ExtractFunction::ExtractItemSequence::ExtractIterator(aArchive, aEntryList, false){}
+
+              virtual ~DeleteIterator() {}
+
+              bool
+              next(zorba::Item& aItem);
+          };
+
+        //public:
+          DeleteItemSequence(zorba::Item& aArchive)
+          : ExtractFunction::ExtractItemSequence(aArchive, false) {}
+
+          virtual ~DeleteItemSequence() {}
+
+          zorba::Iterator_t
+          getIterator() { return new DeleteIterator(theArchive, theEntryNames); }
+
+      };
+
+      class DeleteHeaderItemSequence : public ExtractFunction::ExtractItemSequence
+      {
+        public:
+          class DeleteHeaderIterator : public ExtractFunction::ExtractItemSequence::ExtractIterator
+          {
+            protected:
+              zorba::Item theUntypedQName;
+              zorba::Item theEntryName;
+              zorba::Item theUncompressedSizeName;
+              zorba::Item theLastModifiedName;
+              
+            public:
+              DeleteHeaderIterator(zorba::Item& aArchive,
+              ExtractFunction::ExtractItemSequence::EntryNameSet& aEntryList);
+
+              virtual ~DeleteHeaderIterator() {}
+
+              bool
+              next(zorba::Item& aItem);
+          };
+
+        //public:
+          DeleteHeaderItemSequence(zorba::Item& aArchive) :
+          ExtractFunction::ExtractItemSequence(aArchive, false) {}
+
+          virtual ~DeleteHeaderItemSequence() {}
+
+          zorba::Iterator_t
+          getIterator() { return new DeleteHeaderIterator(theArchive, theEntryNames); }
+
+      };
     public:
       DeleteFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 
