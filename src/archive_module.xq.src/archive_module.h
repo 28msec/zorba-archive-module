@@ -396,15 +396,8 @@ namespace zorba { namespace archive {
       class ExtractItemSequence : public ArchiveItemSequence
       {
         public:
-          struct StringComparator
-          {
-            bool operator() (const zorba::String& s1, const zorba::String& s2)
-            {
-              return s1.compare(s2);
-            }
-          };
 
-          typedef std::set<zorba::String, StringComparator> EntryNameSet;
+          typedef std::set<std::string> EntryNameSet;
           typedef EntryNameSet::const_iterator EntryNameSetIter;
 
           class ExtractIterator : public ArchiveIterator
@@ -645,7 +638,7 @@ namespace zorba { namespace archive {
             public:
               UpdateIterator(
                   zorba::Item& aArchive,
-                  ExtractItemSequence::EntryNameSet& aEntryNames,
+                  EntryNameSet& aEntryNames,
                   bool aReturnAll,
                   std::unique_ptr<ArchiveEntry>& aEntry)
                 : ExtractIterator(aArchive, aEntryNames, aReturnAll),
@@ -710,62 +703,42 @@ namespace zorba { namespace archive {
         public:
           class DeleteIterator : public ExtractFunction::ExtractItemSequence::ExtractIterator
           {
-            //protected:
-            //  std::vector<ArchiveEntry>& theBlacklistedEntries;
-              
             public:
               DeleteIterator(zorba::Item& aArchive,
-              ExtractFunction::ExtractItemSequence::EntryNameSet& aEntryList):
-              ExtractFunction::ExtractItemSequence::ExtractIterator(aArchive, aEntryList, false){}
+                  EntryNameSet& aEntryList,
+                  std::unique_ptr<ArchiveEntry>& aEntry)
+                : ExtractIterator(aArchive, aEntryList, false),
+                  theEntry(aEntry){}
 
               virtual ~DeleteIterator() {}
 
               bool
               next(zorba::Item& aItem);
+
+            protected:
+              std::unique_ptr<ArchiveEntry>& theEntry;
           };
 
         //public:
           DeleteItemSequence(zorba::Item& aArchive)
-          : ExtractFunction::ExtractItemSequence(aArchive, false) {}
+            : ExtractFunction::ExtractItemSequence(aArchive, false) {}
 
           virtual ~DeleteItemSequence() {}
 
+          ArchiveEntry*
+            getEntry() { return theEntry.release(); }
+
           zorba::Iterator_t
-          getIterator() { return new DeleteIterator(theArchive, theEntryNames); }
+          getIterator() 
+          { 
+            return new DeleteIterator(theArchive, theEntryNames, theEntry); 
+          }
+
+        protected:
+          std::unique_ptr<ArchiveEntry> theEntry;
 
       };
 
-      class DeleteHeaderItemSequence : public ExtractFunction::ExtractItemSequence
-      {
-        public:
-          class DeleteHeaderIterator : public ExtractFunction::ExtractItemSequence::ExtractIterator
-          {
-            protected:
-              zorba::Item theUntypedQName;
-              zorba::Item theEntryName;
-              zorba::Item theUncompressedSizeName;
-              zorba::Item theLastModifiedName;
-              
-            public:
-              DeleteHeaderIterator(zorba::Item& aArchive,
-              ExtractFunction::ExtractItemSequence::EntryNameSet& aEntryList);
-
-              virtual ~DeleteHeaderIterator() {}
-
-              bool
-              next(zorba::Item& aItem);
-          };
-
-        //public:
-          DeleteHeaderItemSequence(zorba::Item& aArchive) :
-          ExtractFunction::ExtractItemSequence(aArchive, false) {}
-
-          virtual ~DeleteHeaderItemSequence() {}
-
-          zorba::Iterator_t
-          getIterator() { return new DeleteHeaderIterator(theArchive, theEntryNames); }
-
-      };
     public:
       DeleteFunction(const ArchiveModule* aModule) : ArchiveFunction(aModule) {}
 

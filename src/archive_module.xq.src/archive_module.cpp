@@ -1070,12 +1070,12 @@ namespace zorba { namespace archive {
 
       String lName = archive_entry_pathname(lEntry);
       if(aMatch) {
-        if (theEntryNames.find(lName) != theEntryNames.end())
+        if (theEntryNames.find(lName.str()) != theEntryNames.end())
         {
           break;
         }
       } else {
-        if (theEntryNames.find(lName) == theEntryNames.end())
+        if (theEntryNames.find(lName.str()) == theEntryNames.end())
         {
           break;
         }
@@ -1124,7 +1124,7 @@ namespace zorba { namespace archive {
       lIter->open();
       while (lIter->next(lItem))
       {
-        lSet.insert(lItem.getStringValue());
+        lSet.insert(lItem.getStringValue().str());
       }
 
       lIter->close();
@@ -1138,6 +1138,10 @@ namespace zorba { namespace archive {
       zorba::Item& aRes)
   {
     struct archive_entry *lEntry = lookForHeader(true);
+
+    //NULL is EOF
+    if (!lEntry)
+      return false;
 
     /*while (true)
     {
@@ -1231,7 +1235,7 @@ namespace zorba { namespace archive {
       lIter->open();
       while (lIter->next(lItem))
       {
-        lSet.insert(lItem.getStringValue());
+        lSet.insert(lItem.getStringValue().str());
       }
 
       lIter->close();
@@ -1246,6 +1250,10 @@ namespace zorba { namespace archive {
   {
     struct archive_entry *lEntry = lookForHeader(true);
 
+    //NULL is EOF
+    if (!lEntry)
+      return false;
+    
     /*while (true)
     {
       int lErr = archive_read_next_header(theArchive, &lEntry);
@@ -1384,31 +1392,16 @@ namespace zorba { namespace archive {
   UpdateFunction::UpdateItemSequence::UpdateIterator::next(
     zorba::Item& aRes)
   {
-    struct archive_entry *lEntry;
-
-    while(true)
-    {
-      int lErr = archive_read_next_header(theArchive, &lEntry);
-      
-      if (lErr == ARCHIVE_EOF) return false;
-
-      if (lErr != ARCHIVE_OK)
-      {
-        ArchiveFunction::checkForError(lErr, 0, theArchive);
-      }
-
-      if (theReturnAll) break;
-
-      //String lName = archive_entry_pathname(lEntry);
-      //TODO: Add a way to remove repeated files files
-
-    }
-
+    struct archive_entry *lEntry = lookForHeader(false);
+    
+    //NULL is EOF
+    if (!lEntry)
+      return false;
+    
     //form an ArchiveEntry with the entry
     theEntry.reset(new ArchiveEntry());
     theEntry->setValues(lEntry);
-
-
+    
     //read entry content
     std::vector<unsigned char> lResult;
 
@@ -1445,6 +1438,9 @@ namespace zorba { namespace archive {
   {
     Item lArchive = getOneItem(aArgs, 0);
 
+    std::auto_ptr<UpdateItemSequence> lSeq(
+    new UpdateItemSequence(lArchive, false));
+
     std::vector<ArchiveEntry> lEntries;
 
     {
@@ -1452,27 +1448,23 @@ namespace zorba { namespace archive {
 
       zorba::Item lEntry;
       lEntriesIter->open();
+      ExtractFunction::ExtractItemSequence::EntryNameSet& lNameSet 
+          = lSeq->getNameSet();
       while (lEntriesIter->next(lEntry))
       {
         lEntries.resize(lEntries.size() + 1);
         lEntries.back().setValues(lEntry);
-        //TODO Fill the EntrySetName of the read iterator
+        lNameSet.insert(lEntries.back().getEntryPath().str());
       }
       lEntriesIter->close();
-    }
-
-    ArchiveOptions lOptions;
+    } 
 
     zorba::Iterator_t lFileIter = aArgs[2]->getIterator();
 
-    std::auto_ptr<UpdateItemSequence> lSeq(
-      new UpdateItemSequence(lArchive, true));
-
     ArchiveCompressor lResArchive;
-
+    ArchiveOptions lOptions;
     //TODO: add a way to fill the options
     lResArchive.open(lOptions);
-
 
     Item lItem;
     Iterator_t lSeqIter = lSeq->getIterator();
@@ -1506,58 +1498,38 @@ namespace zorba { namespace archive {
   {
     Item lArchive = getOneItem(aArgs, 0);
 
-    std::auto_ptr<ExtractFunction::ExtractItemSequence> lHeadSeq(
-        new DeleteHeaderItemSequence(lArchive));
-
-    ExtractFunction::ExtractItemSequence::EntryNameSet& lHeadSet
-      = lHeadSeq->getNameSet();
+    std::auto_ptr<DeleteItemSequence> lSeq(
+      new DeleteItemSequence(lArchive));
 
     zorba::Item lItem;
     Iterator_t lIter = aArgs[1]->getIterator();
     lIter->open();
+    ExtractFunction::ExtractItemSequence::EntryNameSet& lNameSet =
+      lSeq->getNameSet();
     while (lIter->next(lItem))
     {
-      lHeadSet.insert(lItem.getStringValue());
+      lNameSet.insert(lItem.getStringValue().str());
     }
-
     lIter->close();
 
-    Iterator_t lHeadIter = lHeadSeq->getIterator();
-
-    std::vector<ArchiveEntry> lEntries;
-    zorba::Item lEntry;
-    lHeadIter->open();
-    while (lHeadIter->next(lEntry))
-    {
-      lEntries.resize(lEntries.size() + 1);
-      lEntries.back().setValues(lEntry);
-    }
-    lHeadIter->close();
-
-    std::auto_ptr<ExtractFunction::ExtractItemSequence> lSeq(
-        new DeleteItemSequence(lArchive));
-
-    ExtractFunction::ExtractItemSequence::EntryNameSet& lSet
-      = lSeq->getNameSet();
-
-    lIter->open();
-    while (lIter->next(lItem))
-    {
-      lSet.insert(lItem.getStringValue());
-    }
-
-    lIter->close();
-
-    ArchiveCompressor lCompressor;
+    ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
+    lResArchive.open(lOptions);
 
-    lCompressor.open(lOptions);
-    lCompressor.compress(lEntries, lSeq->getIterator());
-    lCompressor.close();
+    zorba::Item lContent;
+    Iterator_t lSeqIter = lSeq->getIterator();
+    lSeqIter->open();
+    while (lSeqIter->next(lContent))
+    {
+      lResArchive.compress(*(lSeq->getEntry()), lContent);
+    }
+    lSeqIter->close();
+
+    lResArchive.close();
 
     zorba::Item lRes = theModule->getItemFactory()->
       createStreamableBase64Binary(
-        *lCompressor.getResultStream(),
+        *lResArchive.getResultStream(),
         &(ArchiveFunction::ArchiveCompressor::releaseStream),
         true, // seekable
         false // not encoded
@@ -1570,9 +1542,18 @@ namespace zorba { namespace archive {
       zorba::Item& aRes)
   {
     struct archive_entry *lEntry = lookForHeader(false);
+    
+    //NULL is EOF
+    if (!lEntry)
+      return false;
+    
+    //form an ArchiveEntry with the entry
+    theEntry.reset(new ArchiveEntry());
+    theEntry->setValues(lEntry);
+    
+    //read entry content
     std::vector<unsigned char> lResult;
 
-    // reserve some space if we know the decompressed size
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
@@ -1582,82 +1563,18 @@ namespace zorba { namespace archive {
     std::vector<unsigned char> lBuf;
     lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
 
-    // read entire entry into a string
+    //read entry into string
     while (true)
     {
       int s = archive_read_data(
-          theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
-
+        theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
+     
       if (s == 0) break;
 
       lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
     }
 
     aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
-
-    return true;
-  }
-
-  DeleteFunction::DeleteHeaderItemSequence::DeleteHeaderIterator::DeleteHeaderIterator(
-      zorba::Item& aArchive,
-      ExtractFunction::ExtractItemSequence::EntryNameSet& aEntryList)
-    : ExtractFunction::ExtractItemSequence::ExtractIterator(aArchive, aEntryList, false)
-  {
-    theUntypedQName = theFactory->createQName(
-        "http://www.w3.org/2001/XMLSchema", "untyped");
-
-    theEntryName = theFactory->createQName(
-        ArchiveModule::getModuleURI(), "entry");
-
-    theLastModifiedName = theFactory->createQName("", "last-modified");
-    theUncompressedSizeName = theFactory->createQName("", "size");
-  }
-
-  bool
-  DeleteFunction::DeleteHeaderItemSequence::DeleteHeaderIterator::next(
-      zorba::Item& aRes)
-  {
-    struct archive_entry *lEntry = lookForHeader(false);
-
-    if(lEntry == NULL) return false;
-
-    int lErr = 0;
-    Item lNoParent;
-    Item lType = theUntypedQName;
-
-    // create entry element
-    aRes = theFactory->createElementNode(
-        lNoParent, theEntryName, lType, true, false, NsBindings());
-
-    // create text content (i.e. path name)
-    String lName = archive_entry_pathname(lEntry);
-    Item lNameItem = theFactory->createString(lName);
-    theFactory->assignElementTypedValue(aRes, lNameItem);
-
-    // create size attr if the value is set in the archive
-    if (archive_entry_size_is_set(lEntry))
-    {
-      long long lSize = archive_entry_size(lEntry);
-      Item lSizeItem = theFactory->createInteger(lSize);
-      lType = theUntypedQName;
-      theFactory->createAttributeNode(
-          aRes, theUncompressedSizeName, lType, lSizeItem);
-    }
-
-    // create last-modified attr if the value is set in the archive
-    if (archive_entry_mtime_is_set(lEntry))
-    {
-      time_t lTime = archive_entry_mtime(lEntry);
-      Item lModifiedItem = ArchiveModule::createDateTimeItem(lTime);
-
-      lType = theUntypedQName;
-      theFactory->createAttributeNode(
-          aRes, theLastModifiedName, lType, lModifiedItem);
-    }
-
-    // skip to the next entry and raise an error if that fails
-    lErr = archive_read_data_skip(theArchive);
-    ArchiveFunction::checkForError(lErr, 0, theArchive);
 
     return true;
   }
