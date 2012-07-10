@@ -1053,7 +1053,7 @@ namespace zorba { namespace archive {
   struct archive_entry*
     ExtractFunction::ExtractItemSequence::ExtractIterator::lookForHeader(bool aMatch)
   {
-    struct archive_entry *lEntry;
+    struct archive_entry *lEntry = 0;
 
     while (true)
     {
@@ -1399,8 +1399,7 @@ namespace zorba { namespace archive {
       return false;
     
     //form an ArchiveEntry with the entry
-    theEntry.reset(new ArchiveEntry());
-    theEntry->setValues(lEntry);
+    theEntry.setValues(lEntry);
     
     //read entry content
     std::vector<unsigned char> lResult;
@@ -1471,7 +1470,7 @@ namespace zorba { namespace archive {
     lSeqIter->open();
     while (lSeqIter->next(lItem))
     {
-      lResArchive.compress(*(lSeq->getEntry()), lItem);
+      lResArchive.compress(lSeq->getEntry(), lItem);
     }
     lSeqIter->close();
 
@@ -1521,7 +1520,7 @@ namespace zorba { namespace archive {
     lSeqIter->open();
     while (lSeqIter->next(lContent))
     {
-      lResArchive.compress(*(lSeq->getEntry()), lContent);
+      lResArchive.compress(lSeq->getEntry(), lContent);
     }
     lSeqIter->close();
 
@@ -1548,8 +1547,7 @@ namespace zorba { namespace archive {
       return false;
     
     //form an ArchiveEntry with the entry
-    theEntry.reset(new ArchiveEntry());
-    theEntry->setValues(lEntry);
+    theEntry.setValues(lEntry);
     
     //read entry content
     std::vector<unsigned char> lResult;

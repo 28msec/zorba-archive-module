@@ -640,7 +640,7 @@ namespace zorba { namespace archive {
                   zorba::Item& aArchive,
                   EntryNameSet& aEntryNames,
                   bool aReturnAll,
-                  std::unique_ptr<ArchiveEntry>& aEntry)
+                  ArchiveEntry& aEntry)
                 : ExtractIterator(aArchive, aEntryNames, aReturnAll),
                   theEntry(aEntry) {}
 
@@ -650,7 +650,7 @@ namespace zorba { namespace archive {
               next(zorba::Item& aItem);
 
             protected:
-              std::unique_ptr<ArchiveEntry>& theEntry;
+              ArchiveEntry& theEntry;
           };
 
         public:
@@ -662,8 +662,8 @@ namespace zorba { namespace archive {
 
           virtual ~UpdateItemSequence() {}
 
-          ArchiveEntry* 
-          getEntry() { return theEntry.release(); }
+          const ArchiveEntry&
+          getEntry() { return theEntry; }
 
           zorba::Iterator_t
           getIterator()
@@ -673,7 +673,7 @@ namespace zorba { namespace archive {
           }
 
         protected:
-          std::unique_ptr<ArchiveEntry> theEntry;
+          ArchiveEntry theEntry;
 
       };
 
@@ -706,7 +706,7 @@ namespace zorba { namespace archive {
             public:
               DeleteIterator(zorba::Item& aArchive,
                   EntryNameSet& aEntryList,
-                  std::unique_ptr<ArchiveEntry>& aEntry)
+                  ArchiveEntry& aEntry)
                 : ExtractIterator(aArchive, aEntryList, false),
                   theEntry(aEntry){}
 
@@ -716,7 +716,7 @@ namespace zorba { namespace archive {
               next(zorba::Item& aItem);
 
             protected:
-              std::unique_ptr<ArchiveEntry>& theEntry;
+              ArchiveEntry& theEntry;
           };
 
         //public:
@@ -725,8 +725,8 @@ namespace zorba { namespace archive {
 
           virtual ~DeleteItemSequence() {}
 
-          ArchiveEntry*
-            getEntry() { return theEntry.release(); }
+          const ArchiveEntry&
+            getEntry() { return theEntry; }
 
           zorba::Iterator_t
           getIterator() 
@@ -735,8 +735,7 @@ namespace zorba { namespace archive {
           }
 
         protected:
-          std::unique_ptr<ArchiveEntry> theEntry;
-
+          ArchiveEntry theEntry;
       };
 
     public:
