@@ -1051,7 +1051,7 @@ namespace zorba { namespace archive {
  *  or are not in a list (ArchiveEntrySet)
  ******************************************************************************/
   struct archive_entry*
-    ExtractFunction::ExtractItemSequence::ExtractIterator::lookForHeader(bool aMatch)
+    ExtractFunction::ExtractItemSequence::ExtractIterator::lookForHeader(bool aMatch, ArchiveOptions* aOptions)
   {
     struct archive_entry *lEntry = 0;
 
@@ -1065,6 +1065,9 @@ namespace zorba { namespace archive {
       {
         ArchiveFunction::checkForError(lErr, 0, theArchive);
       }
+
+      if(aOptions)
+        aOptions->setValues(theArchive);
 
       if (theReturnAll) break;
 
@@ -1392,12 +1395,12 @@ namespace zorba { namespace archive {
   UpdateFunction::UpdateItemSequence::UpdateIterator::next(
     zorba::Item& aRes)
   {
-    struct archive_entry *lEntry = lookForHeader(false);
+    struct archive_entry *lEntry = lookForHeader(false, &theOptions);
     
     //NULL is EOF
     if (!lEntry)
       return false;
-    
+
     //form an ArchiveEntry with the entry
     theEntry.setValues(lEntry);
     
@@ -1462,15 +1465,20 @@ namespace zorba { namespace archive {
 
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
-    //TODO: add a way to fill the options
-    lResArchive.open(lOptions);
 
     Item lItem;
     Iterator_t lSeqIter = lSeq->getIterator();
+    
     lSeqIter->open();
-    while (lSeqIter->next(lItem))
+    lSeqIter->next(lItem);
+    lOptions = lSeq->getOptions();
+    lResArchive.open(lOptions);
+    if (!lItem.isNull())
     {
-      lResArchive.compress(lSeq->getEntry(), lItem);
+      do 
+      {
+        lResArchive.compress(lSeq->getEntry(), lItem);
+      } while (lSeqIter->next(lItem));
     }
     lSeqIter->close();
 
@@ -1513,17 +1521,23 @@ namespace zorba { namespace archive {
 
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
-    lResArchive.open(lOptions);
 
-    zorba::Item lContent;
+    Item lContent;
     Iterator_t lSeqIter = lSeq->getIterator();
+
     lSeqIter->open();
-    while (lSeqIter->next(lContent))
+    lSeqIter->next(lContent);
+    lOptions = lSeq->getOptions();
+    lResArchive.open(lOptions);
+    if (!lContent.isNull())
     {
-      lResArchive.compress(lSeq->getEntry(), lContent);
+      do 
+      {
+        lResArchive.compress(lSeq->getEntry(), lContent);
+      } while (lSeqIter->next(lContent));
     }
     lSeqIter->close();
-
+    
     lResArchive.close();
 
     zorba::Item lRes = theModule->getItemFactory()->
@@ -1540,7 +1554,7 @@ namespace zorba { namespace archive {
   DeleteFunction::DeleteItemSequence::DeleteIterator::next(
       zorba::Item& aRes)
   {
-    struct archive_entry *lEntry = lookForHeader(false);
+    struct archive_entry *lEntry = lookForHeader(false, &theOptions);
     
     //NULL is EOF
     if (!lEntry)
