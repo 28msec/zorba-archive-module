@@ -47,6 +47,10 @@
   <xs:simpleType name="entry-encoding-type">
     <xs:restriction base="xs:string"/>
   </xs:simpleType>
+  
+  <xs:simpleType name="entry-options-type">
+    <xs:restriction base="xs:string"/>
+  </xs:simpleType>
  
   <!-- base type -->
   <xs:complexType name="base-param-type">
@@ -124,6 +128,7 @@
     <xs:attribute name="size" type="entry-size-type"/>
     <xs:attribute name="last-modified" type="entry-datetime-type"/>
     <xs:attribute name="encoding" type="entry-encoding-type"/>
+    <xs:attribute name="options" type="entry-options-type"/>
   </xs:attributeGroup>
 
 </xs:schema>

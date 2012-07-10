@@ -197,6 +197,7 @@ namespace zorba { namespace archive {
         String theEncoding;
         int theSize;
         time_t theLastModified;
+        String theOptions;
 
       public:
         ArchiveEntry();
@@ -208,6 +209,8 @@ namespace zorba { namespace archive {
         int getSize() const { return theSize; }
 
         const time_t& getLastModified() const { return theLastModified; }
+        
+        const String& getOptions() const { return theOptions; }
 
         void setValues(zorba::Item& aEntry);
 

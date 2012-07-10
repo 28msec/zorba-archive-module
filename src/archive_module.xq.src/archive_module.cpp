@@ -231,6 +231,9 @@ namespace zorba { namespace archive {
             throwError("ARCH0004", lMsg.str().c_str());
           }
         }
+        else if(lAttrName.getLocalName() == "options"){
+          theOptions = lAttr.getStringValue();
+        }
       }
     }
   }
@@ -551,7 +554,8 @@ namespace zorba { namespace archive {
       std::istream* lStream;
       bool lDeleteStream;
       uint64_t lFileSize;
-
+      int lErr;
+      
       lDeleteStream = getStream(
           aEntry, aFile, lStream, lFileSize);
 
@@ -564,6 +568,11 @@ namespace zorba { namespace archive {
       archive_entry_set_size(theEntry, lFileSize);
 
       archive_write_header(theArchive, theEntry);
+
+      if(strlen(aEntry.getOptions().c_str())>0){
+        lErr = archive_write_set_options(theArchive, aEntry.getOptions().c_str());
+        checkForError(lErr, NULL, theArchive);
+      }
 
       char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
       while (lStream->good())
