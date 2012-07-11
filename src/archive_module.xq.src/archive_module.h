@@ -414,7 +414,7 @@ namespace zorba { namespace archive {
                   theEntryNames(aEntryNames),
                   theReturnAll(aReturnAll) {}
 
-              struct archive_entry* lookForHeader(bool aMatch);
+              struct archive_entry* lookForHeader(bool aMatch, ArchiveOptions* aOptions = NULL);
 
               virtual ~ExtractIterator() {}
 
@@ -572,7 +572,7 @@ namespace zorba { namespace archive {
  ******************************************************************************/
   class OptionsFunction : public ArchiveFunction
   {
-    protected:
+    public:
     class OptionsItemSequence : public ArchiveItemSequence
     {
       public:
@@ -643,9 +643,11 @@ namespace zorba { namespace archive {
                   zorba::Item& aArchive,
                   EntryNameSet& aEntryNames,
                   bool aReturnAll,
-                  std::unique_ptr<ArchiveEntry>& aEntry)
+                  ArchiveEntry& aEntry,
+                  ArchiveOptions& aOptions)
                 : ExtractIterator(aArchive, aEntryNames, aReturnAll),
-                  theEntry(aEntry) {}
+                  theEntry(aEntry),
+                  theOptions(aOptions){}
 
               virtual ~UpdateIterator() {}
 
@@ -653,7 +655,8 @@ namespace zorba { namespace archive {
               next(zorba::Item& aItem);
 
             protected:
-              std::unique_ptr<ArchiveEntry>& theEntry;
+              ArchiveEntry& theEntry;
+              ArchiveOptions& theOptions;
           };
 
         public:
@@ -665,18 +668,22 @@ namespace zorba { namespace archive {
 
           virtual ~UpdateItemSequence() {}
 
-          ArchiveEntry* 
-          getEntry() { return theEntry.release(); }
+          const ArchiveEntry&
+          getEntry() { return theEntry; }
+
+          ArchiveOptions&
+          getOptions() { return theOptions; }
 
           zorba::Iterator_t
           getIterator()
           {
             return new UpdateIterator(
-                theArchive, theEntryNames, theReturnAll, theEntry);
+                theArchive, theEntryNames, theReturnAll, theEntry, theOptions);
           }
 
         protected:
-          std::unique_ptr<ArchiveEntry> theEntry;
+          ArchiveEntry theEntry;
+          ArchiveOptions theOptions;
 
       };
 
@@ -709,9 +716,11 @@ namespace zorba { namespace archive {
             public:
               DeleteIterator(zorba::Item& aArchive,
                   EntryNameSet& aEntryList,
-                  std::unique_ptr<ArchiveEntry>& aEntry)
+                  ArchiveEntry& aEntry,
+                  ArchiveOptions& aOptions)
                 : ExtractIterator(aArchive, aEntryList, false),
-                  theEntry(aEntry){}
+                  theEntry(aEntry),
+                  theOptions(aOptions){}
 
               virtual ~DeleteIterator() {}
 
@@ -719,7 +728,8 @@ namespace zorba { namespace archive {
               next(zorba::Item& aItem);
 
             protected:
-              std::unique_ptr<ArchiveEntry>& theEntry;
+              ArchiveEntry& theEntry;
+              ArchiveOptions& theOptions;
           };
 
         //public:
@@ -728,18 +738,21 @@ namespace zorba { namespace archive {
 
           virtual ~DeleteItemSequence() {}
 
-          ArchiveEntry*
-            getEntry() { return theEntry.release(); }
+          const ArchiveEntry&
+          getEntry() { return theEntry; }
+
+          ArchiveOptions&
+          getOptions() { return theOptions; }
 
           zorba::Iterator_t
           getIterator() 
           { 
-            return new DeleteIterator(theArchive, theEntryNames, theEntry); 
+            return new DeleteIterator(theArchive, theEntryNames, theEntry, theOptions); 
           }
 
         protected:
-          std::unique_ptr<ArchiveEntry> theEntry;
-
+          ArchiveEntry theEntry;
+          ArchiveOptions theOptions;
       };
 
     public:
