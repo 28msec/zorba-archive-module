@@ -275,9 +275,6 @@ namespace zorba { namespace archive {
     theAlgorithm = ArchiveFunction::compressionName(archive_compression(aArchive));
     theFormat = ArchiveFunction::formatName(archive_format(aArchive));
     theCompressionLevel = archive_compression(aArchive);
-
-    if(theFormat == "ZIP")
-      theAlgorithm = "DEFLATE";
   }
 
   void
