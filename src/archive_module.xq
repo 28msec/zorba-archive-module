@@ -80,17 +80,18 @@ declare function a:create(
  : match the length of the $entries sequence (a:ARCH0001). All items of type
  : xs:base64Binary are decoded before being added to the archive.</p>
  :
- : <p>For each entry, the name, last-modified date and time, and compression-level
+ : <p>For each entry, the name, last-modified date and time, and compression
  : can be specified. In addition, an encoding can be specified which is used to
  : store entries of type xs:string. If no last-modified attribute is given, the
- : default is the current date and time.</p>
+ : default is the current date and time. The compression is useful if various
+ : entries in a ZIP archive are compressed using different compression
+ : algorithms (i.e. store or deflate).</p>
  :
  : <p>For example, the following sequence may be used to describe an archive
- : containing three elemenets:
+ : containing three elements:
  : <pre>
  : &lt;a:entry last-modified="{fn:current-dateTime()}">myfile.txt&lt;/a:entry>
- : &lt;a:entry encoding="ISO-8859-1">dir/myfile.xml&lt;/a:entry>
- : &lt;a:entry compression-level="1">dir/dir2/image.png&lt;/a:entry>
+ : &lt;a:entry encoding="ISO-8859-1" compression="store">dir/myfile.xml&lt;/a:entry>
  : </pre>
  : </p>
  :
@@ -100,8 +101,8 @@ declare function a:create(
  : algorithm:
  : <pre>
  : &lt;archive:options>
- :   &lt;archive:format value="ZIP"/>
- :   &lt;archive:algorithm value="DEFLATE"/>
+ :   &lt;archive:format>ZIP&lt;/archive:format>
+ :   &lt;archive:compression>DEFLATE&lt;/archive:compression>
  : &lt;/archive:options>
  : </pre>
  : </p>
@@ -255,10 +256,10 @@ declare function a:delete($archive as xs:base64Binary, $entry-names as xs:string
  : For example, for a ZIP archive, the following options element
  : would be returned:
  : <pre>
- : &lt;options xmlns="http://www.expath.org/ns/archive">
- :   &lt;format value="ZIP"/>
- :   &lt;algorithm value="DEFLATE"/>
- : &lt;/options>
+ : &lt;archive:options>
+ :   &lt;archive:format>ZIP&lt;/archive:format>
+ :   &lt;archive:compressionDEFLATE&lt;/archive:compression>
+ : &lt;/archive:options>
  : </pre>
  :
  : @param $archive the archive as xs:base64Binary

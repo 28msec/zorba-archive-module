@@ -11,6 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/archive_module.xq.src/config.h.in" "${CMAKE_CURRENT_BINARY_DIR}/archive_module.xq.src/config.h")
+
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_BINARY_DIR}/archive_module.xq.src")
   
 DECLARE_ZORBA_MODULE (
   URI "http://www.expath.org/ns/archive"

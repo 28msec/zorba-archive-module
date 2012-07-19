@@ -29,6 +29,10 @@
 
 #define ZORBA_ARCHIVE_MAX_READ_BUF 2048
 
+#define ZORBA_ARCHIVE_COMPRESSION_DEFLATE 50
+#define ZORBA_ARCHIVE_COMPRESSION_STORE   51
+
+
 namespace zorba { namespace archive {
 
 /*******************************************************************************
@@ -160,22 +164,18 @@ namespace zorba { namespace archive {
       class ArchiveOptions
       {
       protected:
-        std::string theAlgorithm;
+        std::string theCompression;
         std::string theFormat;
-        short  theCompressionLevel;
 
       public:
 
         ArchiveOptions();
 
         const std::string&
-        getAlgorithm() const { return theAlgorithm; }
+        getCompression() const { return theCompression; }
 
         const std::string&
         getFormat() const { return theFormat; }
-
-        short
-        getCompressionLevel() const { return theCompressionLevel; }
 
         void
         setValues(Item&);
@@ -197,7 +197,7 @@ namespace zorba { namespace archive {
         String theEncoding;
         int theSize;
         time_t theLastModified;
-        String theOptions;
+        String theCompression;
 
       public:
         ArchiveEntry();
@@ -210,7 +210,7 @@ namespace zorba { namespace archive {
 
         const time_t& getLastModified() const { return theLastModified; }
         
-        const String& getOptions() const { return theOptions; }
+        const String& getCompression() const { return theCompression; }
 
         void setValues(zorba::Item& aEntry);
 
@@ -224,6 +224,7 @@ namespace zorba { namespace archive {
         struct archive *theArchive;
         struct archive_entry *theEntry;
         std::stringstream* theStream;
+        ArchiveOptions  theOptions;
 
       public:
         ArchiveCompressor();

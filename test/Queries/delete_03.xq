@@ -4,8 +4,8 @@ let $foo-content := "<foo/>"
 let $bar-content := xs:base64Binary("YWJj")
 let $options := 
 <a:options>
- <a:format value="TAR"/>
- <a:algorithm value="GZIP"/>
+ <a:format>TAR</a:format>
+ <a:compression>GZIP</a:compression>
 </a:options>
 let $archive0 := a:create(
   ("foo.xml"),

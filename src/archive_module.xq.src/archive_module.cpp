@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include "archive.h"
 #include "archive_entry.h"
+#include "config.h"
 
 #include <sys/timeb.h>
 #ifdef UNIX
@@ -231,8 +232,12 @@ namespace zorba { namespace archive {
             throwError("ARCH0004", lMsg.str().c_str());
           }
         }
-        else if(lAttrName.getLocalName() == "options"){
-          theOptions = lAttr.getStringValue();
+        else if(lAttrName.getLocalName() == "compression"){
+          theCompression = lAttr.getStringValue();
+          std::transform(
+              theCompression.begin(),
+              theCompression.end(),
+              theCompression.begin(), ::toupper);
         }
       }
     }
@@ -243,9 +248,8 @@ namespace zorba { namespace archive {
   ********************/
 
   ArchiveFunction::ArchiveOptions::ArchiveOptions()
-    : theAlgorithm("NONE"),
-      theFormat("ZIP"),
-      theCompressionLevel(4)
+    : theCompression("DEFLATE"),
+      theFormat("ZIP")
   {}
 
   std::string
@@ -275,9 +279,9 @@ namespace zorba { namespace archive {
   void
   ArchiveFunction::ArchiveOptions::setValues(struct archive* aArchive)
   {
-    theAlgorithm = ArchiveFunction::compressionName(archive_compression(aArchive));
+    theCompression = ArchiveFunction::compressionName(
+        archive_compression(aArchive));
     theFormat = ArchiveFunction::formatName(archive_format(aArchive));
-    theCompressionLevel = archive_compression(aArchive);
   }
 
   void
@@ -293,18 +297,21 @@ namespace zorba { namespace archive {
       Item lOptionName;
       lOption.getNodeName(lOptionName);
 
-      if (lOptionName.getLocalName() == "algorithm")
+      if (lOptionName.getLocalName() == "compression")
       {
-        theAlgorithm = getAttributeValue(lOption);
+        theCompression = lOption.getStringValue().c_str();
+        std::transform(
+            theCompression.begin(),
+            theCompression.end(),
+            theCompression.begin(), ::toupper);
       }
       else if (lOptionName.getLocalName() == "format")
       {
-        theFormat = getAttributeValue(lOption);
-      }
-      else if (lOptionName.getLocalName() == "compression")
-      {
-        std::string lTmp = getAttributeValue(lOption);
-        theCompressionLevel = atoi(lTmp.c_str());
+        theFormat = lOption.getStringValue().c_str();
+        std::transform(
+            theFormat.begin(),
+            theFormat.end(),
+            theFormat.begin(), ::toupper);
       }
     }
   }
@@ -329,11 +336,13 @@ namespace zorba { namespace archive {
   void
   ArchiveFunction::ArchiveCompressor::setOptions(const ArchiveOptions& aOptions)
   {
+    theOptions = aOptions;
+
     int lFormatCode = formatCode(aOptions.getFormat().c_str());
     int lErr = archive_write_set_format(theArchive, lFormatCode);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
 
-    int lCompressionCode = compressionCode(aOptions.getAlgorithm().c_str());
+    int lCompressionCode = compressionCode(aOptions.getCompression().c_str());
     setArchiveCompression(theArchive, lCompressionCode);
 
     lErr = archive_write_open(
@@ -551,7 +560,6 @@ namespace zorba { namespace archive {
       std::istream* lStream;
       bool lDeleteStream;
       uint64_t lFileSize;
-      int lErr;
       
       lDeleteStream = getStream(
           aEntry, aFile, lStream, lFileSize);
@@ -564,12 +572,38 @@ namespace zorba { namespace archive {
       archive_entry_set_perm(theEntry, 0644);
       archive_entry_set_size(theEntry, lFileSize);
 
-      archive_write_header(theArchive, theEntry);
+      if (theOptions.getFormat() == "ZIP")
+      {
+        int lNextComp;
+        std::string lNextCompString;
+        if (aEntry.getCompression().length() > 0)
+        {
+          lNextCompString = aEntry.getCompression().c_str();
+          lNextComp = compressionCode(lNextCompString);
+#ifndef ZORBA_LIBARCHIVE_HAVE_SET_COMPRESSION
+          std::ostringstream lMsg;
+          lMsg << lNextCompString << ": setting different compression algorithms for each entry is not supported by the used version of libarchive";
+          throwError("ARCH0099", lMsg.str().c_str());
+#endif
+        }
+        else
+        {
+          lNextCompString = theOptions.getCompression();
+          lNextComp = compressionCode(lNextCompString);
+        }
+        if (lNextComp < ZORBA_ARCHIVE_COMPRESSION_DEFLATE)
+        {
+          std::ostringstream lMsg;
+          lMsg << lNextCompString << ": compression algorithm not supported for ZIP format (required: deflate, store)";
+          throwError("ARCH0002", lMsg.str().c_str());
+        }
 
-      if(strlen(aEntry.getOptions().c_str())>0){
-        lErr = archive_write_set_options(theArchive, aEntry.getOptions().c_str());
-        checkForError(lErr, NULL, theArchive);
+#ifdef ZORBA_LIBARCHIVE_HAVE_SET_COMPRESSION
+        setArchiveCompression(theArchive, lNextComp);
+#endif
       }
+
+      archive_write_header(theArchive, theEntry);
 
       char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
       while (lStream->good())
@@ -676,6 +710,8 @@ namespace zorba { namespace archive {
     switch (c)
     {
       case ARCHIVE_COMPRESSION_NONE: return "NONE";
+      case ZORBA_ARCHIVE_COMPRESSION_DEFLATE: return "DEFLATE";
+      case ZORBA_ARCHIVE_COMPRESSION_STORE: return "STORE";
       case ARCHIVE_COMPRESSION_GZIP: return "GZIP";
       case ARCHIVE_COMPRESSION_BZIP2: return "BZIP2";
       case ARCHIVE_COMPRESSION_COMPRESS: return "COMPRESS";
@@ -746,6 +782,14 @@ namespace zorba { namespace archive {
     {
       return ARCHIVE_COMPRESSION_NONE;
     }
+    if (c == "STORE")
+    {
+      return ZORBA_ARCHIVE_COMPRESSION_STORE;
+    }
+    if (c == "DEFLATE")
+    {
+      return ZORBA_ARCHIVE_COMPRESSION_DEFLATE;
+    }
     else if (c == "GZIP")
     {
       return ARCHIVE_COMPRESSION_GZIP;
@@ -781,8 +825,22 @@ namespace zorba { namespace archive {
     int lErr = 0;
     switch (c)
     {
+#ifdef ZORBA_LIBARCHIVE_HAVE_SET_COMPRESSION
+      case ZORBA_ARCHIVE_COMPRESSION_STORE:
+        lErr = archive_write_zip_set_compression_store(a); break;
+      case ZORBA_ARCHIVE_COMPRESSION_DEFLATE:
+      case ARCHIVE_COMPRESSION_NONE:
+        lErr = archive_write_zip_set_compression_deflate(a); break;
+#else
+      case ZORBA_ARCHIVE_COMPRESSION_STORE:
+        archive_write_set_option(a, "zip", "compression", "store");
+        break;
+      case ZORBA_ARCHIVE_COMPRESSION_DEFLATE:
+        archive_write_set_option(a, "zip", "compression", "deflate");
+        break;
       case ARCHIVE_COMPRESSION_NONE:
         lErr = archive_write_set_compression_none(a); break;
+#endif
       case ARCHIVE_COMPRESSION_GZIP:
         lErr = archive_write_set_compression_gzip(a); break;
       case ARCHIVE_COMPRESSION_BZIP2:
@@ -1057,7 +1115,9 @@ namespace zorba { namespace archive {
  *  or are not in a list (ArchiveEntrySet)
  ******************************************************************************/
   struct archive_entry*
-    ExtractFunction::ExtractItemSequence::ExtractIterator::lookForHeader(bool aMatch, ArchiveOptions* aOptions)
+    ExtractFunction::ExtractItemSequence::ExtractIterator::lookForHeader(
+        bool aMatch,
+        ArchiveOptions* aOptions)
   {
     struct archive_entry *lEntry = 0;
 
@@ -1345,12 +1405,12 @@ namespace zorba { namespace archive {
 
     std::string lFormat =
       ArchiveFunction::formatName(archive_format(theArchive));
-    std::string lAlgorithm =
+    std::string lCompression =
       ArchiveFunction::compressionName(archive_compression(theArchive));
 
     if (lFormat == "ZIP")
     {
-      lAlgorithm = "DEFLATE";
+      lCompression = "DEFLATE";
     }
 
     zorba::Item lUntypedQName = theFactory->createQName(
@@ -1363,10 +1423,8 @@ namespace zorba { namespace archive {
     zorba::Item lFormatQName = theFactory->createQName(
         ArchiveModule::getModuleURI(), "format");
 
-    zorba::Item lAlgorithmQName = theFactory->createQName(
-        ArchiveModule::getModuleURI(), "algorithm");
-
-    zorba::Item lValueQName = theFactory->createQName("", "value"); 
+    zorba::Item lCompressionQName = theFactory->createQName(
+        ArchiveModule::getModuleURI(), "compression");
 
     zorba::Item lNoParent;
     aRes = theFactory->createElementNode(
@@ -1377,20 +1435,11 @@ namespace zorba { namespace archive {
         aRes, lFormatQName, lTmpQName, true, false, NsBindings());
 
     lTmpQName = lUntypedQName;
-    zorba::Item lAlgorithmItem = theFactory->createElementNode(
-        aRes, lAlgorithmQName, lTmpQName, true, false, NsBindings());
+    zorba::Item lCompressionItem = theFactory->createElementNode(
+        aRes, lCompressionQName, lTmpQName, true, false, NsBindings());
 
-    zorba::Item lTmpItem = theFactory->createString(lFormat);
-
-    lTmpQName = lUntypedQName;
-    theFactory->createAttributeNode(
-        lFormatItem, lValueQName, lTmpQName, lTmpItem);
-
-    lTmpItem = theFactory->createString(lAlgorithm);
-
-    lTmpQName = lUntypedQName;
-    theFactory->createAttributeNode(
-        lAlgorithmItem, lValueQName, lTmpQName, lTmpItem);
+    theFactory->createTextNode(lFormatItem, lFormat);
+    theFactory->createTextNode(lCompressionItem, lCompression);
 
     return true;
   }
