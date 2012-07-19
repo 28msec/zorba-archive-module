@@ -314,6 +314,30 @@ namespace zorba { namespace archive {
             theFormat.begin(), ::toupper);
       }
     }
+    if (theFormat == "ZIP")
+    {
+      if (theCompression != "STORE" && theCompression != "DEFLATE")
+      {
+        std::ostringstream lMsg;
+        lMsg
+          << theCompression
+          << ": compression algorithm not supported for ZIP format (required: deflate, store)";
+        throwError("ARCH0002", lMsg.str().c_str());
+      }
+    }
+    if (theFormat == "TAR")
+    {
+      if (theCompression != "GZIP" &&
+          theCompression != "BZIP2" &&
+          theCompression != "LZMA")
+      {
+        std::ostringstream lMsg;
+        lMsg
+          << theCompression
+          << ": compression algorithm not supported for TAR format (required: gzip, bzip2, lzma)";
+        throwError("ARCH0002", lMsg.str().c_str());
+      }
+    }
   }
 
   /************************
@@ -602,6 +626,15 @@ namespace zorba { namespace archive {
         setArchiveCompression(theArchive, lNextComp);
 #endif
       }
+      else
+      {
+        if (aEntry.getCompression().length() > 0)
+        {
+          std::ostringstream lMsg;
+          lMsg << aEntry.getCompression() << ": compression attribute only allowed for zip format";
+          throwError("ARCH0099", lMsg.str().c_str());
+        }
+      }
 
       archive_write_header(theArchive, theEntry);
 
@@ -690,16 +723,8 @@ namespace zorba { namespace archive {
     // first 16 bit indicate the format family
     switch (f & ARCHIVE_FORMAT_BASE_MASK)
     {
-      case ARCHIVE_FORMAT_CPIO: return "CPIO";
-      case ARCHIVE_FORMAT_SHAR: return "SHAR";
       case ARCHIVE_FORMAT_TAR: return "TAR";
-      case ARCHIVE_FORMAT_ISO9660: return "ISO9660";
       case ARCHIVE_FORMAT_ZIP: return "ZIP";
-      case ARCHIVE_FORMAT_EMPTY: return "EMPTY";
-      case ARCHIVE_FORMAT_AR: return "AR";
-      case ARCHIVE_FORMAT_MTREE: return "MTREE";
-      case ARCHIVE_FORMAT_RAW: return "RAW";
-      case ARCHIVE_FORMAT_XAR: return "XAR";
       default: return "";
     }
   }
@@ -714,11 +739,7 @@ namespace zorba { namespace archive {
       case ZORBA_ARCHIVE_COMPRESSION_STORE: return "STORE";
       case ARCHIVE_COMPRESSION_GZIP: return "GZIP";
       case ARCHIVE_COMPRESSION_BZIP2: return "BZIP2";
-      case ARCHIVE_COMPRESSION_COMPRESS: return "COMPRESS";
       case ARCHIVE_COMPRESSION_LZMA: return "LZMA";
-      case ARCHIVE_COMPRESSION_XZ: return "XZ";
-      case ARCHIVE_COMPRESSION_UU: return "UU";
-      case ARCHIVE_COMPRESSION_RPM: return "RPM";
       default: return "";
     }
   }
@@ -726,45 +747,13 @@ namespace zorba { namespace archive {
   int
   ArchiveFunction::formatCode(const std::string& f)
   {
-    if (f == "CPIO")
-    {
-      return ARCHIVE_FORMAT_CPIO;
-    }
-    else if (f == "SHAR")
-    {
-      return ARCHIVE_FORMAT_SHAR;
-    }
-    else if (f == "TAR")
+    if (f == "TAR")
     {
       return ARCHIVE_FORMAT_TAR_USTAR;
-    }
-    else if (f == "ISO9660")
-    {
-      return ARCHIVE_FORMAT_ISO9660;
     }
     else if (f == "ZIP")
     {
       return ARCHIVE_FORMAT_ZIP;
-    }
-    else if (f == "EMPTY")
-    {
-      return ARCHIVE_FORMAT_EMPTY;
-    }
-    else if (f == "AR")
-    {
-      return ARCHIVE_FORMAT_AR;
-    }
-    else if (f == "MTREE")
-    {
-      return ARCHIVE_FORMAT_MTREE;
-    }
-    else if (f == "RAW")
-    {
-      return ARCHIVE_FORMAT_RAW;
-    }
-    else if (f == "XAR")
-    {
-      return ARCHIVE_FORMAT_XAR;
     }
     else
     {
@@ -798,17 +787,9 @@ namespace zorba { namespace archive {
     {
       return ARCHIVE_COMPRESSION_BZIP2;
     }
-    else if (c == "COMPRESS")
-    {
-      return ARCHIVE_COMPRESSION_COMPRESS;
-    }
     else if (c == "LZMA")
     {
       return ARCHIVE_COMPRESSION_LZMA;
-    }
-    else if (c == "XZ")
-    {
-      return ARCHIVE_COMPRESSION_XZ;
     }
     else
     {
@@ -845,12 +826,8 @@ namespace zorba { namespace archive {
         lErr = archive_write_set_compression_gzip(a); break;
       case ARCHIVE_COMPRESSION_BZIP2:
         lErr = archive_write_set_compression_bzip2(a); break;
-      case ARCHIVE_COMPRESSION_COMPRESS:
-        lErr = archive_write_set_compression_compress(a); break;
       case ARCHIVE_COMPRESSION_LZMA:
         lErr = archive_write_set_compression_lzma(a); break;
-      case ARCHIVE_COMPRESSION_XZ:
-        lErr = archive_write_set_compression_xz(a); break;
       default: assert(false);
     }
     ArchiveFunction::checkForError(lErr, 0, a);
