@@ -15,8 +15,8 @@
  */
 
 
-#ifndef _ORG_EXPATH_WWW_NS_ARCHIVE_H_
-#define _ORG_EXPATH_WWW_NS_ARCHIVE_H_
+#ifndef ORG_EXPATH_NS_ARCHIVE_H_
+#define ORG_EXPATH_NS_ARCHIVE_H_
 
 #include <map>
 #include <set>
@@ -71,7 +71,7 @@ namespace zorba { namespace archive {
       }
 
       static zorba::String
-      getModuleURI() { return "http://www.expath.org/ns/archive"; }
+      getModuleURI() { return "http://expath.org/ns/archive"; }
 
       static zorba::Item
       createDateTimeItem(time_t&);

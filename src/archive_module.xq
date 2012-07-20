@@ -33,9 +33,9 @@ xquery version "1.0";
  :
  : @library <a href="http://code.google.com/p/libarchive/">libarchive</a>
  :)
-module namespace a = "http://www.expath.org/ns/archive";
+module namespace a = "http://expath.org/ns/archive";
  
-import schema namespace options = "http://www.expath.org/ns/archive";
+import schema namespace options = "http://expath.org/ns/archive";
 
 declare namespace ver = "http://www.zorba-xquery.com/options/versioning";
 declare option ver:module-version "1.0";

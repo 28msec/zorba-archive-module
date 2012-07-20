@@ -1,5 +1,5 @@
-import module namespace a = "http://www.expath.org/ns/archive";
-import schema namespace as = "http://www.expath.org/ns/archive";
+import module namespace a = "http://expath.org/ns/archive";
+import schema namespace as = "http://expath.org/ns/archive";
 import module namespace f = "http://expath.org/ns/file";
 
 let $a := f:read-binary(resolve-uri("linear-algebra-20120306.epub"))

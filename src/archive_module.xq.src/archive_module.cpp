@@ -814,10 +814,10 @@ namespace zorba { namespace archive {
         lErr = archive_write_zip_set_compression_deflate(a); break;
 #else
       case ZORBA_ARCHIVE_COMPRESSION_STORE:
-        archive_write_set_option(a, "zip", "compression", "store");
+        archive_write_set_options(a, "zip:compression=store");
         break;
       case ZORBA_ARCHIVE_COMPRESSION_DEFLATE:
-        archive_write_set_option(a, "zip", "compression", "deflate");
+        archive_write_set_options(a, "zip:compression=deflate");
         break;
       case ARCHIVE_COMPRESSION_NONE:
         lErr = archive_write_set_compression_none(a); break;

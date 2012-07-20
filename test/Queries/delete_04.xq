@@ -1,4 +1,4 @@
-import module namespace a = "http://www.expath.org/ns/archive";
+import module namespace a = "http://expath.org/ns/archive";
 
 let $foo-content := "<foo/>"
 let $bar-content := xs:base64Binary("YWJj")
