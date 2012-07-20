@@ -316,7 +316,7 @@ namespace zorba { namespace archive {
     }
     if (theFormat == "ZIP")
     {
-      if (theCompression != "STORE" && theCompression != "DEFLATE")
+      if (theCompression != "STORE" && theCompression != "DEFLATE" && theCompression != "NONE")
       {
         std::ostringstream lMsg;
         lMsg
@@ -615,7 +615,7 @@ namespace zorba { namespace archive {
           lNextCompString = theOptions.getCompression();
           lNextComp = compressionCode(lNextCompString);
         }
-        if (lNextComp < ZORBA_ARCHIVE_COMPRESSION_DEFLATE)
+        if (lNextComp < ZORBA_ARCHIVE_COMPRESSION_DEFLATE && lNextComp != ARCHIVE_COMPRESSION_NONE)
         {
           std::ostringstream lMsg;
           lMsg << lNextCompString << ": compression algorithm not supported for ZIP format (required: deflate, store)";
