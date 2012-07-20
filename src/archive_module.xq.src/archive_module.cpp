@@ -1470,13 +1470,16 @@ namespace zorba { namespace archive {
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
   {
+    //Base64 Binary of the Archive
     Item lArchive = getOneItem(aArgs, 0);
 
+    //Initialize an Update Iterator with the Archive recived from the function
     std::auto_ptr<UpdateItemSequence> lSeq(
     new UpdateItemSequence(lArchive, false));
 
     std::vector<ArchiveEntry> lEntries;
 
+    //prepare list of entries to be updated into the Archive
     {
       Iterator_t lEntriesIter = aArgs[1]->getIterator();
 
@@ -1493,27 +1496,36 @@ namespace zorba { namespace archive {
       lEntriesIter->close();
     } 
 
+    //get the iterator of Files to include in the archive
     zorba::Iterator_t lFileIter = aArgs[2]->getIterator();
 
+    //Prepare new archive, for compressing the Files form the original 
+    //updated with the new Files specified
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
 
     Item lItem;
     Iterator_t lSeqIter = lSeq->getIterator();
     
+    //read first header and file of the archive so we can get the options before creating 
+    //the new archive.
     lSeqIter->open();
     lSeqIter->next(lItem);
+    //set the options of the archive
     lOptions = lSeq->getOptions();
+    //create new archive with the options read
     lResArchive.open(lOptions);
     if (!lItem.isNull())
     {
       do 
       {
+        //add and compress the files of the old archive into the new archive.
         lResArchive.compress(lSeq->getEntry(), lItem);
       } while (lSeqIter->next(lItem));
     }
     lSeqIter->close();
 
+    //add and compress the new file sspecified as a parameter for the function.
     lResArchive.compress(lEntries, lFileIter);
     lResArchive.close();
 
@@ -1535,11 +1547,13 @@ namespace zorba { namespace archive {
       const zorba::StaticContext* aSctx,
       const zorba::DynamicContext* aDctx) const 
   {
+    //Base64 Binary of the Archive
     Item lArchive = getOneItem(aArgs, 0);
 
     std::auto_ptr<DeleteItemSequence> lSeq(
       new DeleteItemSequence(lArchive));
 
+    //set list of files to delete from the archive.
     zorba::Item lItem;
     Iterator_t lIter = aArgs[1]->getIterator();
     lIter->open();
@@ -1551,20 +1565,26 @@ namespace zorba { namespace archive {
     }
     lIter->close();
 
+    //prepare new archive
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
 
     Item lContent;
     Iterator_t lSeqIter = lSeq->getIterator();
-
+    
+    //read first header and file of the archive so we can get the options before creating 
+    //the new archive.
     lSeqIter->open();
     lSeqIter->next(lContent);
+    //set the options of the archive
     lOptions = lSeq->getOptions();
+    //create new archive with the options read
     lResArchive.open(lOptions);
     if (!lContent.isNull())
     {
       do 
       {
+        //add and compress the files of the old archive into the new archive.
         lResArchive.compress(lSeq->getEntry(), lContent);
       } while (lSeqIter->next(lContent));
     }
