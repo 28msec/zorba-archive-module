@@ -229,24 +229,41 @@ declare function a:extract-binary($archive as xs:base64Binary, $entry-names as x
     as xs:base64Binary* external;
   
 (:~
- : Adds and replaces entries in a archive according to
+ : Adds and replaces entries in an archive according to
  : the given spec. The contents can be string and base64Binary items.
  :
- : @return the updated base64Binary
+ : <p>The parameters $entries and $contents have the same meaning as for
+ : the function a:create with three arguments.</p>
+ :  
+ : @param $archive the archive to add or replace content
+ : @param $entries the meta data for the entries in the archive. Each entry
+ :   can be of type xs:string or an element with name a:entry.
+ : @param $contents the content for the archive. Each item in the sequence
+ :   can be of type xs:string or xs:base64Binary.
+ :  
+ : @return the updated xs:base64Binary
  :
- : @error if the number of entry elements differs from the number
- :        of specified contents: count($entries) ne count($contents)
+ : @error a:ARCH0001 if the number of entry elements differs from the number
+ :        of items in the $contents sequence: count($entries) ne count($contents) 
+ : @error a:ARCH0003 if a value for an entry element is invalid
+ : @error a:ARCH0004 if a given encoding is invalid or not supported
+ : @error err:FORG0006 if an item in the contents sequence is not of type xs:string
+ :   or xs:base64Binary
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
  :
  :)
 declare function a:update($archive as xs:base64Binary, $entries as item()*, $contents as item()*)
     as xs:base64Binary external;
   
 (:~
- : Deletes entries from a archive.
+ : Deletes entries from an archive.
  :
+ : @param $archive the archive to extract the entries from as xs:base64Binary
+ : @param $entry-names a sequence of names for entries which should be deleted
+ : 
  : @return the updated base64Binary
  :
- : @error if an addressed entry does not exist
+ : @error a:ARCH9999 if $archive is not an archive or corrupted
  :)
 declare function a:delete($archive as xs:base64Binary, $entry-names as xs:string*)
     as xs:base64Binary external;
