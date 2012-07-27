@@ -1,1 +1,1 @@
-Error: http://expath.org/ns/archive:ARCH9999
+Error: http://www.zorba-xquery.com/modules/archive:ARCH9999

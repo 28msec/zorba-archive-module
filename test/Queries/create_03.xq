@@ -1,4 +1,4 @@
-import module namespace a = "http://expath.org/ns/archive";
+import module namespace a = "http://www.zorba-xquery.com/modules/archive";
 
 let $foo-content := "<foo/>"
 let $bar-content := "<bar/>"

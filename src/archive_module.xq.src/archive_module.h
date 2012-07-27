@@ -71,7 +71,7 @@ namespace zorba { namespace archive {
       }
 
       static zorba::String
-      getModuleURI() { return "http://expath.org/ns/archive"; }
+      getModuleURI() { return "http://www.zorba-xquery.com/modules/archive"; }
 
       static zorba::Item
       createDateTimeItem(time_t&);

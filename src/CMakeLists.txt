@@ -17,11 +17,11 @@ CONFIGURE_FILE("${CMAKE_CURRENT_SOURCE_DIR}/archive_module.xq.src/config.h.in" "
 INCLUDE_DIRECTORIES("${CMAKE_CURRENT_BINARY_DIR}/archive_module.xq.src")
   
 DECLARE_ZORBA_MODULE (
-  URI "http://expath.org/ns/archive"
+  URI "http://www.zorba-xquery.com/modules/archive"
   VERSION 1.0
   FILE "archive_module.xq"
   LINK_LIBRARIES "${LIBARCHIVE_LIBRARIES}")
 
 DECLARE_ZORBA_SCHEMA (
-  URI "http://expath.org/ns/archive"
+  URI "http://www.zorba-xquery.com/modules/archive"
   FILE "archive.xsd")
