@@ -166,6 +166,7 @@ namespace zorba { namespace archive {
       protected:
         std::string theCompression;
         std::string theFormat;
+        bool        theSkipExtraAttrs;
 
       public:
 
@@ -183,6 +184,9 @@ namespace zorba { namespace archive {
         void
         setValues(struct archive* aArchive);
 
+        bool
+        getSkipExtraAttrs() const { return theSkipExtraAttrs; }
+
       protected:
         static std::string
         getAttributeValue(
@@ -198,6 +202,7 @@ namespace zorba { namespace archive {
         int theSize;
         time_t theLastModified;
         String theCompression;
+        bool theSkipExtras;
 
       public:
         ArchiveEntry();
@@ -215,6 +220,8 @@ namespace zorba { namespace archive {
         void setValues(zorba::Item& aEntry);
 
         void setValues(struct archive_entry* aEntry);
+
+        bool skipExtras() const { return theSkipExtras; }
       };
 
       class ArchiveCompressor

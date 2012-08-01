@@ -22,11 +22,18 @@
   <xs:simpleType name="format-type">
     <xs:restriction base="xs:string">
       <xs:enumeration value="zip"/>
-      <xs:enumeration value="pax"/>
+      <xs:enumeration value="tar"/>
       <xs:enumeration value="pax"/>
       <xs:enumeration value="ZIP"/>
       <xs:enumeration value="TAR"/>
       <xs:enumeration value="PAX"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="boolean-type">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -55,6 +62,9 @@
         substitutionGroup="archive-option-element"/>
  
   <xs:element name="format" type="format-type"
+        substitutionGroup="archive-option-element"/>
+
+  <xs:element name="skip-extra-attributes" type="boolean-type"
         substitutionGroup="archive-option-element"/>
  
   <xs:element name="options">

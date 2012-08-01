@@ -232,7 +232,8 @@ namespace zorba { namespace archive {
             throwError("ARCH0004", lMsg.str().c_str());
           }
         }
-        else if(lAttrName.getLocalName() == "compression"){
+        else if (lAttrName.getLocalName() == "compression")
+        {
           theCompression = lAttr.getStringValue();
           std::transform(
               theCompression.begin(),
@@ -249,32 +250,9 @@ namespace zorba { namespace archive {
 
   ArchiveFunction::ArchiveOptions::ArchiveOptions()
     : theCompression("DEFLATE"),
-      theFormat("ZIP")
+      theFormat("ZIP"),
+      theSkipExtraAttrs(false)
   {}
-
-  std::string
-  ArchiveFunction::ArchiveOptions::getAttributeValue(
-      const Item& aNode,
-      const String& aAttrName)
-  {
-    Item lAttr;
-
-    Iterator_t lAttrIter = aNode.getAttributes();
-    lAttrIter->open();
-    while (lAttrIter->next(lAttr))
-    {
-      Item lAttrName;
-      lAttr.getNodeName(lAttrName);
-
-      if (lAttrName.getLocalName() == aAttrName)
-      {
-        std::string lTmp = lAttr.getStringValue().c_str();
-        std::transform(lTmp.begin(), lTmp.end(), lTmp.begin(), ::toupper);
-        return lTmp;
-      }
-    }
-    return "";
-  }
 
   void
   ArchiveFunction::ArchiveOptions::setValues(struct archive* aArchive)
@@ -312,6 +290,10 @@ namespace zorba { namespace archive {
             theFormat.begin(),
             theFormat.end(),
             theFormat.begin(), ::toupper);
+      }
+      else if (lOptionName.getLocalName() == "skip-extra-attributes")
+      {
+        theSkipExtraAttrs = lOption.getStringValue() == "true" ? true : false;
       }
     }
     if (theFormat == "ZIP")
@@ -368,6 +350,13 @@ namespace zorba { namespace archive {
 
     int lCompressionCode = compressionCode(aOptions.getCompression().c_str());
     setArchiveCompression(theArchive, lCompressionCode);
+
+    if (aOptions.getSkipExtraAttrs())
+    {
+      // ignore result value because some libarchive versions
+      // don't support this option
+      archive_write_set_options(theArchive, "zip:skip-extras=true");
+    }
 
     lErr = archive_write_open(
         theArchive, this, 0, ArchiveFunction::writeStream, 0);
@@ -771,11 +760,11 @@ namespace zorba { namespace archive {
     {
       return ARCHIVE_COMPRESSION_NONE;
     }
-    if (c == "STORE")
+    else if (c == "STORE")
     {
       return ZORBA_ARCHIVE_COMPRESSION_STORE;
     }
-    if (c == "DEFLATE")
+    else if (c == "DEFLATE")
     {
       return ZORBA_ARCHIVE_COMPRESSION_DEFLATE;
     }
