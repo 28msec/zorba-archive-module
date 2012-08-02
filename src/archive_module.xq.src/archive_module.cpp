@@ -630,7 +630,7 @@ namespace zorba { namespace archive {
       while (lStream->good())
       {
         lStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
-        archive_write_data(theArchive, lBuf, lStream->gcount());
+        archive_write_data(theArchive, lBuf, (size_t)lStream->gcount());
       }
 
       archive_entry_clear(theEntry);
@@ -646,8 +646,8 @@ namespace zorba { namespace archive {
   void
   ArchiveFunction::ArchiveCompressor::close()
   {
-	  archive_write_close(theArchive);
-	  archive_write_finish(theArchive);
+    archive_write_close(theArchive);
+    archive_write_finish(theArchive);
   }
 
   std::stringstream*
@@ -846,7 +846,7 @@ namespace zorba { namespace archive {
     // remember the stream pos before leaving the function
     if (lData->theSeekable) lData->thePos = lStream->tellg();
 
-    return lStream->gcount(); 
+    return (long)lStream->gcount(); 
   }
 
   ArchiveItemSequence::ArchiveIterator::ArchiveIterator(zorba::Item& a)
@@ -865,10 +865,10 @@ namespace zorba { namespace archive {
       ArchiveFunction::throwError(
           "ARCH9999", "internal error (couldn't create archive)");
 
-	  int lErr = archive_read_support_compression_all(theArchive);
+    int lErr = archive_read_support_compression_all(theArchive);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
 
-	  archive_read_support_format_all(theArchive);
+    archive_read_support_format_all(theArchive);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
 
     if (theArchiveItem.isStreamable())
@@ -884,7 +884,7 @@ namespace zorba { namespace archive {
         base64::attach(*theData.theStream);
       }
 
-	    lErr = archive_read_open(
+      lErr = archive_read_open(
           theArchive, &theData, 0, ArchiveItemSequence::readStream, 0);
 
       ArchiveFunction::checkForError(lErr, 0, theArchive);
@@ -1177,33 +1177,16 @@ namespace zorba { namespace archive {
     if (!lEntry)
       return false;
 
-    /*while (true)
-    {
-      int lErr = archive_read_next_header(theArchive, &lEntry);
-      
-      if (lErr == ARCHIVE_EOF) return false;
-
-      if (lErr != ARCHIVE_OK)
-      {
-        ArchiveFunction::checkForError(lErr, 0, theArchive);
-      }
-
-      if (theReturnAll) break;
-
-      String lName = archive_entry_pathname(lEntry);
-      if (theEntryNames.find(lName) != theEntryNames.end())
-      {
-        break;
-      }
-    }*/
-
     String lResult;
 
     // reserve some space if we know the decompressed size
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      lResult.reserve(lSize);
+      if (lSize > INT_MAX)
+        lResult.reserve(INT_MAX);
+      else
+        lResult.reserve((int)lSize);
     }
 
     char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
@@ -1230,7 +1213,7 @@ namespace zorba { namespace archive {
       while (lTranscoder.good())
       {
         lTranscoder.read(buf, 1024);
-        lTranscodedString.append(buf, lTranscoder.gcount());
+        lTranscodedString.append(buf, (zorba::String::size_type)lTranscoder.gcount());
       }
       aRes = theFactory->createString(lTranscodedString);
     }
@@ -1287,26 +1270,6 @@ namespace zorba { namespace archive {
     //NULL is EOF
     if (!lEntry)
       return false;
-    
-    /*while (true)
-    {
-      int lErr = archive_read_next_header(theArchive, &lEntry);
-      
-      if (lErr == ARCHIVE_EOF) return false;
-
-      if (lErr != ARCHIVE_OK)
-      {
-        ArchiveFunction::checkForError(lErr, 0, theArchive);
-      }
-
-      if (theReturnAll) break;
-
-      String lName = archive_entry_pathname(lEntry);
-      if (theEntryNames.find(lName) != theEntryNames.end())
-      {
-        break;
-      }
-    }*/
 
     std::vector<unsigned char> lResult;
 
@@ -1314,7 +1277,10 @@ namespace zorba { namespace archive {
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      lResult.reserve(lSize);
+      if(lSize > INT_MAX)
+        lResult.reserve(INT_MAX);
+      else
+        lResult.reserve((int)lSize);
     }
 
     std::vector<unsigned char> lBuf;
@@ -1430,7 +1396,10 @@ namespace zorba { namespace archive {
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      lResult.reserve(lSize);
+      if(lSize > INT_MAX)
+        lResult.reserve(INT_MAX);
+      else
+        lResult.reserve((int)lSize);
     }
 
     std::vector<unsigned char> lBuf;
@@ -1609,7 +1578,10 @@ namespace zorba { namespace archive {
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      lResult.reserve(lSize);
+      if(lSize > INT_MAX)
+        lResult.reserve(INT_MAX);
+      else
+        lResult.reserve((int)lSize);
     }
 
     std::vector<unsigned char> lBuf;
