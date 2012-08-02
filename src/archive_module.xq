@@ -25,7 +25,7 @@ xquery version "1.0";
  : <p>The following archive formats and compression algorithms are supported:
  : <ul>
  :   <li>ZIP (with compression DEFLATE or STORE)</li>
- :   <li>TAR (with compression GZIP or BZIP2)</li>
+ :   <li>TAR (with compression GZIP)</li>
  : </ul>
  : </p>
  : 
