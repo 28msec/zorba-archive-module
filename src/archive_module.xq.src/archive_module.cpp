@@ -189,14 +189,13 @@ namespace zorba { namespace archive {
 
     if (archive_entry_size_is_set(aEntry))
     {
-      //add a size variable
+      theSize = archive_entry_size(aEntry);
     }
 
     if (archive_entry_mtime_is_set(aEntry))
     {
       theLastModified = archive_entry_mtime(aEntry);
     }
-    //check if it is encoded
   }
 
   void
