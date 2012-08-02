@@ -306,10 +306,10 @@ namespace zorba { namespace archive {
     }
     if (theFormat == "TAR")
     {
-      if (theCompression != "GZIP" &&
+      if (theCompression != "GZIP"
 #ifndef WIN32
-          theCompression != "BZIP2" &&
-          theCompression != "LZMA"
+          && theCompression != "BZIP2"
+          && theCompression != "LZMA"
 #endif
         )
       {
