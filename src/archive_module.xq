@@ -218,6 +218,8 @@ declare function a:extract-binary($archive as xs:base64Binary)
  : Returns the entries identified by the given paths from the archive
  : as base64Binary.
  :
+ : @param $archive the archive to extract the entries from as xs:base64Binary
+ :
  : @param $entry-names a sequence of names for entries which should be extracted
  :
  : @return a sequence of xs:base64Binary itmes for the given sequence of names
