@@ -110,22 +110,23 @@ namespace zorba { namespace archive {
   zorba::Item
   ArchiveModule::createDateTimeItem(time_t& aTime)
   {
+    // create a datetime item with UTC as timezone
+    // this seems to be what mtime from libarchive returns
     struct ::tm gmtm;
 #ifdef WIN32
-    localtime_s(&gmtm, &aTime);
+    gmtime_s(&gmtm, &aTime);
 #else
-    localtime_r(&aTime, &gmtm);
+    gmtime_r(&aTime, &gmtm);
 #endif
 
-    // create a datetime item without timezone because
-    // this is what the entry tells us (at least for zip)
     Item lModifiedItem = getItemFactory()->createDateTime(
         static_cast<short>(gmtm.tm_year + 1900),
         static_cast<short>(gmtm.tm_mon + 1),
         static_cast<short>(gmtm.tm_mday),
         static_cast<short>(gmtm.tm_hour),
         static_cast<short>(gmtm.tm_min),
-        gmtm.tm_sec);
+        gmtm.tm_sec,
+        0);
     return lModifiedItem;
   }
 
