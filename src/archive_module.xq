@@ -25,7 +25,7 @@ xquery version "1.0";
  : <p>The following archive formats and compression algorithms are supported:
  : <ul>
  :   <li>ZIP (with compression DEFLATE or STORE)</li>
- :   <li>TAR (with compression GZIP or BZIP2)</li>
+ :   <li>TAR (with compression GZIP)</li>
  : </ul>
  : </p>
  : 
@@ -217,6 +217,8 @@ declare function a:extract-binary($archive as xs:base64Binary)
 (:~
  : Returns the entries identified by the given paths from the archive
  : as base64Binary.
+ :
+ : @param $archive the archive to extract the entries from as xs:base64Binary
  :
  : @param $entry-names a sequence of names for entries which should be extracted
  :
