@@ -150,6 +150,14 @@ namespace zorba { namespace archive {
 #endif    
       readStream(struct archive *a, void *client_data, const void **buff);
 
+      // needed for the "non-linear" zip format
+#ifdef WIN32
+      static __int64 seekStream(struct archive *a, void *data, __int64 request, int whence);
+#else
+      static off_t seekStream(struct archive *a, void *data, off_t request, int whence);
+#endif
+      
+
   };
 
 
@@ -196,12 +204,16 @@ namespace zorba { namespace archive {
 
       class ArchiveEntry
       {
+      public:
+        enum ArchiveEntryType { regular = 0, directory };
+
       protected:
         String theEntryPath;
         String theEncoding;
         int theSize;
         time_t theLastModified;
         String theCompression;
+        ArchiveEntryType theEntryType;
         bool theSkipExtras;
 
       public:
@@ -216,6 +228,8 @@ namespace zorba { namespace archive {
         const time_t& getLastModified() const { return theLastModified; }
         
         const String& getCompression() const { return theCompression; }
+
+        const ArchiveEntryType& getEntryType() const { return theEntryType; }
 
         void setValues(zorba::Item& aEntry);
 
@@ -362,6 +376,7 @@ namespace zorba { namespace archive {
               zorba::Item theEntryName;
               zorba::Item theUncompressedSizeName;
               zorba::Item theLastModifiedName;
+              zorba::Item theEntryType;
 
             public:
               EntriesIterator(zorba::Item& aArchive);
