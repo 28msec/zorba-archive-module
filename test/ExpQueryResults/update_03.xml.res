@@ -1,0 +1,1 @@
+<D:\zorba\code\zorba_modules\archive-module\test\Queries\update_03.xq>:10,21: user-defined error [http://www.zorba-xquery.com/modules/archive#ARCH0001]: number of entries (2) doesn't match number of content arguments (1); raised at D:\zorba\code\zorba_modules\archive-module\src\archive_module.xq.src\archive_module.cpp:686 
