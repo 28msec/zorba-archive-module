@@ -1515,6 +1515,7 @@ namespace zorba { namespace archive {
     //updated with the new Files specified
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
+    bool lHasItem = false;
 
     Item lItem;
     Iterator_t lSeqIter = lSeq->getIterator();
@@ -1522,12 +1523,13 @@ namespace zorba { namespace archive {
     //read first header and file of the archive so we can get the options before creating 
     //the new archive.
     lSeqIter->open();
-    lSeqIter->next(lItem);
+    lHasItem = lSeqIter->next(lItem);
     //set the options of the archive
     lOptions = lSeq->getOptions();
     //create new archive with the options read
     lResArchive.open(lOptions);
-    if (!lItem.isNull())
+    //if (!lItem.isNull())
+    if (lHasItem)
     {
       do 
       {
