@@ -32,6 +32,7 @@ xquery version "1.0";
  : @author Luis Rodgriguez, Juan Zacarias, and Matthias Brantner
  :
  : @library <a href="http://code.google.com/p/libarchive/">libarchive</a>
+ : @project Zorba/Archive
  :)
 module namespace a = "http://www.zorba-xquery.com/modules/archive";
  
@@ -89,22 +90,18 @@ declare function a:create(
  :
  : <p>For example, the following sequence may be used to describe an archive
  : containing three elements:
- : <pre>
- : &lt;a:entry last-modified="{fn:current-dateTime()}">myfile.txt&lt;/a:entry>
- : &lt;a:entry encoding="ISO-8859-1" compression="store">dir/myfile.xml&lt;/a:entry>
- : </pre>
+ : <pre class="ace-static" ace-mode="xquery"><![CDATA[<a:entry last-modified="{fn:current-dateTime()}">myfile.txt</a:entry>
+ : <a:entry encoding="ISO-8859-1" compression="store">dir/myfile.xml</a:entry>]]></pre>
  : </p>
  :
  : <p>The $options argument may be used to describe general options for the
  : archive.  For example, the following option element can be used to create a ZIP
  : archive in which all entries are compressed with the DEFLATE compression
  : algorithm:
- : <pre>
- : &lt;archive:options>
- :   &lt;archive:format>ZIP&lt;/archive:format>
- :   &lt;archive:compression>DEFLATE&lt;/archive:compression>
- : &lt;/archive:options>
- : </pre>
+ : <pre class="ace-static" ace-mode="xquery"><![CDATA[<archive:options>
+ :   <archive:format>ZIP</archive:format>
+ :   <archive:compression>DEFLATE</archive:compression>
+ : </archive:options>]]></pre>
  : </p>
  :
  : <p>The result of the function is the generated archive as a item of type
@@ -274,12 +271,10 @@ declare function a:delete($archive as xs:base64Binary, $entry-names as xs:string
  : Returns the algorithm and format options of the given archive.
  : For example, for a ZIP archive, the following options element
  : would be returned:
- : <pre>
- : &lt;archive:options>
- :   &lt;archive:format>ZIP&lt;/archive:format>
- :   &lt;archive:compressionDEFLATE&lt;/archive:compression>
- : &lt;/archive:options>
- : </pre>
+ : <pre class="ace-static" ace-mode="xquery"><![CDATA[<archive:options>
+ :   <archive:format>ZIP&lt;/archive:format>
+ :   <archive:compressionDEFLATE&lt;/archive:compression>
+ : </archive:options>]]></pre>
  :
  : @param $archive the archive as xs:base64Binary
  :
