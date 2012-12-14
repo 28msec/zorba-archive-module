@@ -110,15 +110,13 @@ namespace zorba { namespace archive {
   zorba::Item
   ArchiveModule::createDateTimeItem(time_t& aTime)
   {
-    long long lTimeShift = 0;
+    // create a datetime item with UTC as timezone
+    // this seems to be what mtime from libarchive returns
     struct ::tm gmtm;
 #ifdef WIN32
-    localtime_s(&gmtm, &aTime);
-    if (gmtm.tm_isdst != 0)
-      lTimeShift += 3600;
+    gmtime_s(&gmtm, &aTime);
 #else
-    localtime_r(&aTime, &gmtm);
-    lTimeShift = gmtm.tm_gmtoff;
+    gmtime_r(&aTime, &gmtm);
 #endif
 
     Item lModifiedItem = getItemFactory()->createDateTime(
@@ -128,7 +126,7 @@ namespace zorba { namespace archive {
         static_cast<short>(gmtm.tm_hour),
         static_cast<short>(gmtm.tm_min),
         gmtm.tm_sec,
-        static_cast<short>(lTimeShift/3600));
+        0);
     return lModifiedItem;
   }
 
@@ -308,14 +306,21 @@ namespace zorba { namespace archive {
     }
     if (theFormat == "TAR")
     {
-      if (theCompression != "GZIP" &&
-          theCompression != "BZIP2" &&
-          theCompression != "LZMA")
+      if (theCompression != "GZIP"
+#ifndef WIN32
+          && theCompression != "BZIP2"
+          && theCompression != "LZMA"
+#endif
+        )
       {
         std::ostringstream lMsg;
         lMsg
           << theCompression
-          << ": compression algorithm not supported for TAR format (required: gzip, bzip2, lzma)";
+          << ": compression algorithm not supported for TAR format (required: gzip"
+#ifndef WIN32
+          << ", bzip2, lzma"
+#endif
+          << ")";
         throwError("ARCH0002", lMsg.str().c_str());
       }
     }
