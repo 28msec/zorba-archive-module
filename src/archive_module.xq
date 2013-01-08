@@ -49,6 +49,19 @@ declare option ver:module-version "1.0";
  : <p>The parameters $entries and $contents have the same meaning as for
  : the function a:create with three arguments.</p>
  :
+ : <p>Entry entries can include a type attribute, this attribute can have one
+ : of two possible values: "regular" or "directory". If "regular" is
+ : specified then the entry will be created as a regular file; if "directory"
+ : is specified then the entry will be created as a directory, no contents
+ : will be read from $contents in this case. If no value is specified for type
+ : then it will be set to "regular". Example:
+ : <pre>
+ : $zip-file := a:create(
+ :    (&lt;a:entry encoding="ISO-8859-1" type="directory">dir1&lt;/a:entry>, "dir1/file1"),
+ :    ("file contents"))
+ : </pre>
+ : </p>
+ :
  : @param $entries the meta data for the entries in the archive. Each entry
  :   can be of type xs:string or an element with name a:entry.
  : @param $contents the content for the archive. Each item in the sequence
@@ -90,18 +103,20 @@ declare function a:create(
  :
  : <p>For example, the following sequence may be used to describe an archive
  : containing three elements:
- : <pre class="ace-static" ace-mode="xquery"><![CDATA[<a:entry last-modified="{fn:current-dateTime()}">myfile.txt</a:entry>
- : <a:entry encoding="ISO-8859-1" compression="store">dir/myfile.xml</a:entry>]]></pre>
+ : <pre class="ace-static" ace-mode="xquery"><![CDATA[&lt;a:entry last-modified="{fn:current-dateTime()}">myfile.txt&lt;/a:entry>
+ : &lt;a:entry encoding="ISO-8859-1" compression="store">dir/myfile.xml&lt;/a:entry>]]>
+ : </pre>
  : </p>
  :
  : <p>The $options argument may be used to describe general options for the
  : archive.  For example, the following option element can be used to create a ZIP
  : archive in which all entries are compressed with the DEFLATE compression
  : algorithm:
- : <pre class="ace-static" ace-mode="xquery"><![CDATA[<archive:options>
- :   <archive:format>ZIP</archive:format>
- :   <archive:compression>DEFLATE</archive:compression>
- : </archive:options>]]></pre>
+ : <pre class="ace-static" ace-mode="xquery"><![CDATA[&lt;archive:options>
+ :   &lt;archive:format>ZIP&lt;/archive:format>
+ :   &lt;archive:compression>DEFLATE&lt;/archive:compression>
+ : &lt;/archive:options>]]>
+ : </pre>
  : </p>
  :
  : <p>The result of the function is the generated archive as a item of type
@@ -271,10 +286,11 @@ declare function a:delete($archive as xs:base64Binary, $entry-names as xs:string
  : Returns the algorithm and format options of the given archive.
  : For example, for a ZIP archive, the following options element
  : would be returned:
- : <pre class="ace-static" ace-mode="xquery"><![CDATA[<archive:options>
- :   <archive:format>ZIP&lt;/archive:format>
- :   <archive:compressionDEFLATE&lt;/archive:compression>
- : </archive:options>]]></pre>
+ : <pre class="ace-static" ace-mode="xquery"><![CDATA[&lt;archive:options>
+ :   &lt;archive:format>ZIP&lt;/archive:format>
+ :   &lt;archive:compressionDEFLATE&lt;/archive:compression>
+ : &lt;/archive:options>]]>
+ : </pre>
  :
  : @param $archive the archive as xs:base64Binary
  :

@@ -119,6 +119,8 @@ namespace zorba { namespace archive {
     gmtime_r(&aTime, &gmtm);
 #endif
 
+    // create a datetime item without timezone because
+    // this is what the entry tells us (at least for zip)
     Item lModifiedItem = getItemFactory()->createDateTime(
         static_cast<short>(gmtm.tm_year + 1900),
         static_cast<short>(gmtm.tm_mon + 1),
@@ -167,7 +169,8 @@ namespace zorba { namespace archive {
   ******************/
 
   ArchiveFunction::ArchiveEntry::ArchiveEntry()
-    : theEncoding("UTF-8")
+    : theEncoding("UTF-8"),
+      theEntryType(regular)
   {
     // use current time as a default for each entry
 #if defined (WIN32)
@@ -187,7 +190,7 @@ namespace zorba { namespace archive {
 
     if (archive_entry_size_is_set(aEntry))
     {
-      //add a size variable
+      theSize = (int)archive_entry_size(aEntry);
     }
 
     if (archive_entry_mtime_is_set(aEntry))
@@ -195,12 +198,19 @@ namespace zorba { namespace archive {
       theLastModified = archive_entry_mtime(aEntry);
     }
     //check if it is encoded
+
+    switch(archive_entry_filetype(aEntry))
+    {
+      case AE_IFDIR: theEntryType = directory; break;
+      default: theEntryType = regular; break;
+    }
   }
 
   void
   ArchiveFunction::ArchiveEntry::setValues(zorba::Item& aEntry)
   {
     theEntryPath = aEntry.getStringValue();
+
     if (aEntry.isNode())
     {
       Item lAttr;
@@ -212,7 +222,15 @@ namespace zorba { namespace archive {
         Item lAttrName;
         lAttr.getNodeName(lAttrName);
 
-        if (lAttrName.getLocalName() == "last-modified")
+        if(lAttrName.getLocalName() == "type")
+        {
+          String filetype = lAttr.getStringValue();
+          if(filetype == "directory")
+          {
+            theEntryType = directory;
+          }
+        }
+        else if (lAttrName.getLocalName() == "last-modified")
         {
           ArchiveModule::parseDateTimeItem(lAttr, theLastModified);
         }
@@ -548,12 +566,15 @@ namespace zorba { namespace archive {
 
     for (size_t i = 0; i < aEntries.size(); ++i)
     {
-      if (!aFiles->next(lFile))
+      if(aEntries[i].getEntryType() == ArchiveEntry::regular)
       {
-        std::ostringstream lMsg;
-        lMsg << "number of entries (" << aEntries.size()
-          << ") doesn't match number of content arguments (" << i << ")";
-        throwError("ARCH0001", lMsg.str().c_str());
+        if (!aFiles->next(lFile))
+        {
+          std::ostringstream lMsg;
+          lMsg << "number of entries (" << aEntries.size()
+            << ") doesn't match number of content arguments (" << i << ")";
+          throwError("ARCH0001", lMsg.str().c_str());
+        }
       }
 
       const ArchiveEntry& lEntry = aEntries[i];
@@ -578,14 +599,19 @@ namespace zorba { namespace archive {
       std::istream* lStream;
       bool lDeleteStream;
       uint64_t lFileSize;
-      
-      lDeleteStream = getStream(
-          aEntry, aFile, lStream, lFileSize);
 
       archive_entry_set_pathname(theEntry, aEntry.getEntryPath().c_str());
       archive_entry_set_mtime(theEntry, aEntry.getLastModified(), 0);
       // TODO: modified to allow the creation of empty directories
-      archive_entry_set_filetype(theEntry, AE_IFREG);
+      if(aEntry.getEntryType() == ArchiveEntry::regular){
+        archive_entry_set_filetype(theEntry, AE_IFREG);
+        lDeleteStream = getStream(
+          aEntry, aFile, lStream, lFileSize);
+      } else {
+        archive_entry_set_filetype(theEntry, AE_IFDIR);
+        lDeleteStream = false;
+        lFileSize = 0;
+      }
       // TODO: specifies the permits of a file
       archive_entry_set_perm(theEntry, 0644);
       archive_entry_set_size(theEntry, lFileSize);
@@ -632,11 +658,14 @@ namespace zorba { namespace archive {
 
       archive_write_header(theArchive, theEntry);
 
-      char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
-      while (lStream->good())
+      if(aEntry.getEntryType() == ArchiveEntry::regular)
       {
-        lStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
-        archive_write_data(theArchive, lBuf, lStream->gcount());
+        char lBuf[ZORBA_ARCHIVE_MAX_READ_BUF];
+        while (lStream->good())
+        {
+          lStream->read(lBuf, ZORBA_ARCHIVE_MAX_READ_BUF);
+          archive_write_data(theArchive, lBuf, lStream->gcount());
+        }
       }
 
       archive_entry_clear(theEntry);
@@ -890,9 +919,15 @@ namespace zorba { namespace archive {
         base64::attach(*theData.theStream);
       }
 
-	    lErr = archive_read_open(
-          theArchive, &theData, 0, ArchiveItemSequence::readStream, 0);
+	    lErr = archive_read_set_read_callback(
+        theArchive, ArchiveItemSequence::readStream);
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
 
+      lErr = archive_read_set_callback_data(
+        theArchive, &theData);
+      ArchiveFunction::checkForError(lErr, 0, theArchive);
+
+      lErr = archive_read_open1(theArchive);
       ArchiveFunction::checkForError(lErr, 0, theArchive);
     }
     else
@@ -1021,6 +1056,7 @@ namespace zorba { namespace archive {
 
     theLastModifiedName = theFactory->createQName("", "last-modified");
     theUncompressedSizeName = theFactory->createQName("", "size");
+    theEntryType = theFactory->createQName("", "type");
   }
 
   bool
@@ -1070,6 +1106,26 @@ namespace zorba { namespace archive {
       theFactory->createAttributeNode(
           aRes, theLastModifiedName, lType, lModifiedItem);
     }
+
+    Item lEntryType;
+    if(archive_entry_filetype(lEntry) == AE_IFDIR)
+    {
+      // this entry is a directory
+      lEntryType = theFactory->createString("directory");
+    }
+    else if(archive_entry_filetype(lEntry) == AE_IFREG)
+    {
+      lEntryType = theFactory->createString("regular");
+    }
+    else
+    {
+      // error! type not supported!
+      // for the time being don't do anything
+    }
+
+    lType = theUntypedQName;
+    theFactory->createAttributeNode(
+      aRes, theEntryType, lType, lEntryType);
 
     // skip to the next entry and raise an error if that fails
     lErr = archive_read_data_skip(theArchive);
@@ -1183,26 +1239,6 @@ namespace zorba { namespace archive {
     if (!lEntry)
       return false;
 
-    /*while (true)
-    {
-      int lErr = archive_read_next_header(theArchive, &lEntry);
-      
-      if (lErr == ARCHIVE_EOF) return false;
-
-      if (lErr != ARCHIVE_OK)
-      {
-        ArchiveFunction::checkForError(lErr, 0, theArchive);
-      }
-
-      if (theReturnAll) break;
-
-      String lName = archive_entry_pathname(lEntry);
-      if (theEntryNames.find(lName) != theEntryNames.end())
-      {
-        break;
-      }
-    }*/
-
     String lResult;
 
     // reserve some space if we know the decompressed size
@@ -1294,26 +1330,6 @@ namespace zorba { namespace archive {
     if (!lEntry)
       return false;
     
-    /*while (true)
-    {
-      int lErr = archive_read_next_header(theArchive, &lEntry);
-      
-      if (lErr == ARCHIVE_EOF) return false;
-
-      if (lErr != ARCHIVE_OK)
-      {
-        ArchiveFunction::checkForError(lErr, 0, theArchive);
-      }
-
-      if (theReturnAll) break;
-
-      String lName = archive_entry_pathname(lEntry);
-      if (theEntryNames.find(lName) != theEntryNames.end())
-      {
-        break;
-      }
-    }*/
-
     std::vector<unsigned char> lResult;
 
     // reserve some space if we know the decompressed size
@@ -1429,31 +1445,33 @@ namespace zorba { namespace archive {
 
     //form an ArchiveEntry with the entry
     theEntry.setValues(lEntry);
-    
-    //read entry content
-    std::vector<unsigned char> lResult;
 
-    if (archive_entry_size_is_set(lEntry))
-    {
-      long long lSize = archive_entry_size(lEntry);
-      lResult.reserve(lSize);
-    }
+    if(archive_entry_filetype(lEntry) == AE_IFREG){
+      //read entry content
+      std::vector<unsigned char> lResult;
 
-    std::vector<unsigned char> lBuf;
-    lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
+      if (archive_entry_size_is_set(lEntry))
+      {
+        long long lSize = archive_entry_size(lEntry);
+        lResult.reserve(lSize);
+      }
 
-    //read entry into string
-    while (true)
-    {
-      int s = archive_read_data(
-        theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
+      std::vector<unsigned char> lBuf;
+      lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
+
+      //read entry into string
+      while (true)
+      {
+        int s = archive_read_data(
+          theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
      
-      if (s == 0) break;
+        if (s == 0) break;
 
-      lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+        lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+      }
+
+      aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
     }
-
-    aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
 
     return true;
   }
@@ -1497,6 +1515,7 @@ namespace zorba { namespace archive {
     //updated with the new Files specified
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
+    bool lHasItem = false;
 
     Item lItem;
     Iterator_t lSeqIter = lSeq->getIterator();
@@ -1504,12 +1523,13 @@ namespace zorba { namespace archive {
     //read first header and file of the archive so we can get the options before creating 
     //the new archive.
     lSeqIter->open();
-    lSeqIter->next(lItem);
+    lHasItem = lSeqIter->next(lItem);
     //set the options of the archive
     lOptions = lSeq->getOptions();
     //create new archive with the options read
     lResArchive.open(lOptions);
-    if (!lItem.isNull())
+    //if (!lItem.isNull())
+    if (lHasItem)
     {
       do 
       {
@@ -1608,31 +1628,36 @@ namespace zorba { namespace archive {
     
     //form an ArchiveEntry with the entry
     theEntry.setValues(lEntry);
+
+    if(archive_entry_filetype(lEntry) == AE_IFREG){
     
-    //read entry content
-    std::vector<unsigned char> lResult;
+      //read entry content
+      std::vector<unsigned char> lResult;
 
-    if (archive_entry_size_is_set(lEntry))
-    {
-      long long lSize = archive_entry_size(lEntry);
-      lResult.reserve(lSize);
-    }
+      if (archive_entry_size_is_set(lEntry))
+      {
+        long long lSize = archive_entry_size(lEntry);
+        lResult.reserve(lSize);
+      }
 
-    std::vector<unsigned char> lBuf;
-    lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
+      std::vector<unsigned char> lBuf;
+      lBuf.resize(ZORBA_ARCHIVE_MAX_READ_BUF);
 
-    //read entry into string
-    while (true)
-    {
-      int s = archive_read_data(
-        theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
+      //read entry into string
+      while (true)
+      {
+        int s = archive_read_data(
+          theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
      
-      if (s == 0) break;
+        if (s == 0) break;
 
-      lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+        lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
+      }
+
+      aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
     }
-
-    aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+    // else? if the entry represents a directory what are we
+    // going to return??
 
     return true;
   }

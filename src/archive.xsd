@@ -53,6 +53,13 @@
     <xs:restriction base="xs:string"/>
   </xs:simpleType>
   
+  <xs:simpleType name="entry-type">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="regular"/>
+      <xs:enumeration value="directory"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
   <!-- elements -->
   <xs:element name="archive-option-element"
     abstract="true" type="xs:string"/>
@@ -88,6 +95,7 @@
  
   <!-- entry attributes -->
   <xs:attributeGroup name="entry-attributes">
+    <xs:attribute name="type" type="entry-type"/>
     <xs:attribute name="size" type="entry-size-type"/>
     <xs:attribute name="last-modified" type="entry-datetime-type"/>
     <xs:attribute name="encoding" type="entry-encoding-type"/>
