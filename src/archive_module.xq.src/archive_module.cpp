@@ -919,15 +919,7 @@ namespace zorba { namespace archive {
         base64::attach(*theData.theStream);
       }
 
-	    lErr = archive_read_set_read_callback(
-        theArchive, ArchiveItemSequence::readStream);
-      ArchiveFunction::checkForError(lErr, 0, theArchive);
-
-      lErr = archive_read_set_callback_data(
-        theArchive, &theData);
-      ArchiveFunction::checkForError(lErr, 0, theArchive);
-
-      lErr = archive_read_open1(theArchive);
+      lErr = archive_read_open(theArchive, &theData, NULL, ArchiveItemSequence::readStream, NULL);
       ArchiveFunction::checkForError(lErr, 0, theArchive);
     }
     else
@@ -1515,7 +1507,6 @@ namespace zorba { namespace archive {
     //updated with the new Files specified
     ArchiveCompressor lResArchive;
     ArchiveOptions lOptions;
-    bool lHasItem = false;
 
     Item lItem;
     Iterator_t lSeqIter = lSeq->getIterator();
@@ -1523,13 +1514,12 @@ namespace zorba { namespace archive {
     //read first header and file of the archive so we can get the options before creating 
     //the new archive.
     lSeqIter->open();
-    lHasItem = lSeqIter->next(lItem);
+    lSeqIter->next(lItem);
     //set the options of the archive
     lOptions = lSeq->getOptions();
     //create new archive with the options read
     lResArchive.open(lOptions);
-    //if (!lItem.isNull())
-    if (lHasItem)
+    if (!lItem.isNull())
     {
       do 
       {
