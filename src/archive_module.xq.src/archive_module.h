@@ -210,7 +210,7 @@ namespace zorba { namespace archive {
       protected:
         String theEntryPath;
         String theEncoding;
-        int theSize;
+        long long theSize;
         time_t theLastModified;
         String theCompression;
         ArchiveEntryType theEntryType;
@@ -223,7 +223,7 @@ namespace zorba { namespace archive {
 
         const String& getEncoding() const { return theEncoding; }
 
-        int getSize() const { return theSize; }
+        long long getSize() const { return theSize; }
 
         const time_t& getLastModified() const { return theLastModified; }
         
