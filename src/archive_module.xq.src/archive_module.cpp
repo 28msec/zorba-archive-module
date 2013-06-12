@@ -14,36 +14,35 @@
  * limitations under the License.
  */
 
-#include <zorba/item_factory.h>
-#include <zorba/singleton_item_sequence.h>
-#include <zorba/diagnostic_list.h>
-#include <zorba/empty_sequence.h>
-#include <zorba/user_exception.h>
-#include <zorba/transcode_stream.h>
-#include <zorba/base64_stream.h>
-#include <zorba/base64.h>
-#include <stdio.h>
-#include <string>
-#include <cassert>
-
 #include <algorithm>
-#include <iostream>
+#include <cassert>
+#include <cstdio>
 #include <fstream>
+#include <iostream>
+#include <string>
 #include <sys/types.h>
-#include "archive.h"
-#include "archive_entry.h"
-#include "config.h"
 
 #include <sys/timeb.h>
 #ifdef UNIX
-#  include <sys/time.h>
+# include <sys/time.h>
 #endif
 #ifdef WIN32
-#  include "strptime.h"
-#  include <MMSystem.h>
+# include <strptime.h>
+# include <MMSystem.h>
 #endif
 
+#include <zorba/diagnostic_list.h>
+#include <zorba/empty_sequence.h>
+#include <zorba/item_factory.h>
+#include <zorba/singleton_item_sequence.h>
+#include <zorba/user_exception.h>
+#include <zorba/util/base64_stream.h>
+#include <zorba/util/transcode_stream.h>
+
+#include "archive.h"
+#include "archive_entry.h"
 #include "archive_module.h"
+#include "config.h"
 
 namespace zorba { namespace archive {
 
@@ -492,8 +491,7 @@ namespace zorba { namespace archive {
       if (aFile.isEncoded())
       {
         zorba::String lEncoded(lBinValue, lResFileSize);
-        zorba::String lDecoded =
-          zorba::encoding::Base64::decode(lEncoded);
+        zorba::String lDecoded = zorba::base64::decode(lEncoded);
         lStream->write(lDecoded.c_str(), lDecoded.length());
         aResFileSize = lDecoded.size();
       }
@@ -931,7 +929,7 @@ namespace zorba { namespace archive {
       if (theArchiveItem.isEncoded())
       {
         zorba::String lEncoded(lData, lLen); 
-        theDecodedData = encoding::Base64::decode(lEncoded);
+        theDecodedData = base64::decode(lEncoded);
         lLen = theDecodedData.size();
         lErr = archive_read_open_memory(theArchive,
             const_cast<char*>(theDecodedData.c_str()), lLen);
