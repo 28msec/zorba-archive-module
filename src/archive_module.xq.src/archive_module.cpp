@@ -36,6 +36,7 @@
 #include <zorba/item_factory.h>
 #include <zorba/singleton_item_sequence.h>
 #include <zorba/user_exception.h>
+#include <zorba/util/base64_util.h>
 #include <zorba/util/base64_stream.h>
 #include <zorba/util/transcode_stream.h>
 
