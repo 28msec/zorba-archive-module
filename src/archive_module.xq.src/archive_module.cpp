@@ -1344,7 +1344,7 @@ namespace zorba { namespace archive {
       lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
     }
 
-    aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+    aRes = theFactory->createBase64Binary(reinterpret_cast<char const*>(&lResult[0]), lResult.size(), false);
 
     return true;
   }
@@ -1461,7 +1461,7 @@ namespace zorba { namespace archive {
         lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
       }
 
-      aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+      aRes = theFactory->createBase64Binary(reinterpret_cast<char const*>(&lResult[0]), lResult.size(), false);
     }
 
     return true;
@@ -1643,7 +1643,7 @@ namespace zorba { namespace archive {
         lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
       }
 
-      aRes = theFactory->createBase64Binary(&lResult[0], lResult.size());
+      aRes = theFactory->createBase64Binary(reinterpret_cast<char const*>(&lResult[0]), lResult.size(), false);
     }
     // else? if the entry represents a directory what are we
     // going to return??
