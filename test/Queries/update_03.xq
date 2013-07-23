@@ -1,5 +1,5 @@
-import module namespace a = "http://www.zorba-xquery.com/modules/archive";
-import module namespace b = "http://www.zorba-xquery.com/modules/converters/base64";
+import module namespace a = "http://zorba.io/modules/archive";
+import module namespace b = "http://zorba.io/modules/base64";
 
 let $foo-content := "<foo/>"
 let $bar-content := xs:base64Binary("YWJj")

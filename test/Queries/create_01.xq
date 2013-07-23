@@ -1,4 +1,4 @@
-import module namespace a = "http://www.zorba-xquery.com/modules/archive";
+import module namespace a = "http://zorba.io/modules/archive";
 
 let $foo-content := "<foo/>"
 let $bar-content := "<bar/>"
@@ -8,6 +8,7 @@ let $archive := a:create(
 )
 return
   string-join(
-    for $a in a:entries($archive)
-    return a:extract-text($archive, $a/text())
+    for $name in a:entries($archive)("name")
+    return a:extract-text($archive, $name)
   ) eq concat($foo-content, $bar-content)
+

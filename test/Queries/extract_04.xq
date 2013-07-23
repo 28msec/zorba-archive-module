@@ -1,4 +1,4 @@
-import module namespace a = "http://www.zorba-xquery.com/modules/archive";
+import module namespace a = "http://zorba.io/modules/archive";
 import module namespace f = "http://expath.org/ns/file";
 
 for $a in a:extract-text(f:read-binary(fn:resolve-uri("transcoding.zip")), "dir2/iso-8859-1.txt", "ISO-8859-1")

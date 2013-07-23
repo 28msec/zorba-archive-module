@@ -1,1 +1,1 @@
-Error: http://www.zorba-xquery.com/modules/archive:ARCH0004
+Error: http://zorba.io/modules/archive:INVALID-ENCODING
