@@ -1119,7 +1119,6 @@ namespace zorba { namespace archive {
       // for the time being don't do anything
     }
 
-    //lMemberName = theFactory->createString("type");
     lElemPair = std::make_pair<zorba::Item, zorba::Item>(gTypeKey,
                                                          theFactory->createString(lEntryType));
     lObjectArray.push_back(lElemPair);
