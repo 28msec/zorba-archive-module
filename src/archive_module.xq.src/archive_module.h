@@ -78,7 +78,6 @@ namespace zorba { namespace archive {
 
       static void
       parseDateTimeItem(const zorba::Item& i, time_t&);
-
   };
 
 
@@ -385,6 +384,12 @@ namespace zorba { namespace archive {
 
               bool
               next(zorba::Item& aItem);
+
+              zorba::Item gNameKey;
+              zorba::Item gTypeKey;
+              zorba::Item gSizeKey;
+              zorba::Item gLastModifiedKey;
+
           };
 
         public:
@@ -602,8 +607,7 @@ namespace zorba { namespace archive {
         class OptionsIterator : public ArchiveIterator
         {
           public:
-            OptionsIterator(zorba::Item& aArchive)
-              : ArchiveIterator(aArchive) {}
+            OptionsIterator(zorba::Item& aArchive);
 
             virtual ~OptionsIterator() {}
 
@@ -616,6 +620,9 @@ namespace zorba { namespace archive {
 
             bool
             next(zorba::Item& aItem);
+
+            zorba::Item gFormatKey;
+            zorba::Item gCompressionKey;
 
           protected:
             bool lExhausted;
@@ -755,7 +762,6 @@ namespace zorba { namespace archive {
               ArchiveOptions& theOptions;
           };
 
-        //public:
           DeleteItemSequence(zorba::Item& aArchive)
             : ExtractFunction::ExtractItemSequence(aArchive, false) {}
 

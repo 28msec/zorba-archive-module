@@ -27,7 +27,7 @@ jsoniq version "1.0";
  :   <li>ZIP (with compression DEFLATE or STORE)</li>
  :   <li>TAR (with compression GZIP)</li>
  : </ul>
- : </p>
+ : <p/>
  : 
  : @author Luis Rodgriguez, Juan Zacarias, and Matthias Brantner
  :
@@ -56,7 +56,7 @@ declare option ver:module-version "1.0";
  : Example:
  : <pre>
  : $zip-file := a:create(
- :    ({ "encoding" : "ISO-8859-1", "type" : "directory", "entry" : "dir1" }, "dir1/file1"),
+ :    ({ "encoding" : "ISO-8859-1", "type" : "directory", "name" : "dir1" }, "dir1/file1"),
  :    ("file contents"))
  : </pre>
  : <p/>
@@ -114,7 +114,7 @@ declare function a:create(
  :   "name" : "dir/myfile.xml"
  : }
  : </pre>
- : </p>
+ : <p/>
  :
  : The $options argument may be used to describe general options for the
  : archive.  For example, the following options can be used to create a ZIP
@@ -259,7 +259,7 @@ declare function a:extract-binary($archive as xs:base64Binary, $entry-names as x
  : the given spec. The contents can be string and base64Binary items. <p/>
  :
  : The parameters $entries and $contents have the same meaning as for
- : the function a:create with three arguments.</p>
+ : the function a:create with three arguments.<p/>
  :  
  : @param $archive the archive to add or replace content
  : @param $entries the meta data for the entries in the archive. Each entry

@@ -52,6 +52,14 @@
 #define ERROR_CORRUPTED_ARCHIVE "CORRUPTED-ARCHIVE"
 #define ERROR_DIFFERENT_COMPRESSIONS_NOT_SUPPORTED "DIFFERENT-COMPRESSIONS-NOT-SUPPORTED"
 
+#define FORMAT_KEY_NAME "format"
+#define COMPRESSION_KEY_NAME "compression"
+#define NAME_KEY_NAME "name"
+#define TYPE_KEY_NAME "type"
+#define SIZE_KEY_NAME "size"
+#define LAST_MODIFIED_KEY_NAME "last-modified"
+#define ENCODING_KEY_NAME "encoding"
+
 namespace zorba { namespace archive {
 
 
@@ -157,7 +165,6 @@ namespace zorba { namespace archive {
     }
   }
 
-
 /*******************************************************************************
  ****************************** ArchiveFunction ********************************
  ******************************************************************************/
@@ -227,11 +234,11 @@ namespace zorba { namespace archive {
         Item lKeyValue;
         lKeyValue = aEntry.getObjectValue(lKey.getStringValue());
 
-        if(lKey.getStringValue() == "name")
+        if(lKey.getStringValue() == NAME_KEY_NAME)
         {
           theEntryPath = lKeyValue.getStringValue();
         }
-        else if(lKey.getStringValue() == "type")
+        else if(lKey.getStringValue() == TYPE_KEY_NAME)
         {
           String filetype = lKeyValue.getStringValue();
           if(filetype == "directory")
@@ -239,11 +246,11 @@ namespace zorba { namespace archive {
             theEntryType = directory;
           }
         }
-        else if (lKey.getStringValue() == "last-modified")
+        else if (lKey.getStringValue() == LAST_MODIFIED_KEY_NAME)
         {
           ArchiveModule::parseDateTimeItem(lKeyValue, theLastModified);
         }
-        else if (lKey.getStringValue() == "encoding")
+        else if (lKey.getStringValue() == ENCODING_KEY_NAME)
         {
           theEncoding = lKeyValue.getStringValue();
           std::transform(
@@ -257,7 +264,7 @@ namespace zorba { namespace archive {
             throwError(ERROR_INVALID_ENCODING, lMsg.str().c_str());
           }
         }
-        else if (lKey.getStringValue() == "compression")
+        else if (lKey.getStringValue() == COMPRESSION_KEY_NAME)
         {
           theCompression = lKeyValue.getStringValue();
           std::transform(
@@ -302,7 +309,7 @@ namespace zorba { namespace archive {
         Item lOptionValue;
         lOptionValue = aOptions.getObjectValue(lOptionKey.getStringValue());
 
-        if (lOptionKey.getStringValue() == "compression")
+        if (lOptionKey.getStringValue() == COMPRESSION_KEY_NAME)
         {
           theCompression = lOptionValue.getStringValue().c_str();
           std::transform(
@@ -310,7 +317,7 @@ namespace zorba { namespace archive {
               theCompression.end(),
               theCompression.begin(), ::toupper);
         }
-        else if (lOptionKey.getStringValue() == "format")
+        else if (lOptionKey.getStringValue() == FORMAT_KEY_NAME)
         {
           theFormat = lOptionValue.getStringValue().c_str();
           std::transform(
@@ -335,8 +342,7 @@ namespace zorba { namespace archive {
         }
       }
       if (theFormat == "TAR")
-      {
-        if (theCompression != "GZIP"
+      {        if (theCompression != "GZIP"
 #ifndef WIN32
             && theCompression != "BZIP2"
             && theCompression != "LZMA"
@@ -1050,6 +1056,10 @@ namespace zorba { namespace archive {
       zorba::Item& aArchive)
     : ArchiveIterator(aArchive)
   {
+      gNameKey = theFactory->createString(NAME_KEY_NAME);
+      gTypeKey = theFactory->createString(TYPE_KEY_NAME);
+      gSizeKey = theFactory->createString(SIZE_KEY_NAME);
+      gLastModifiedKey = theFactory->createString(LAST_MODIFIED_KEY_NAME);
   }
 
   bool
@@ -1069,13 +1079,9 @@ namespace zorba { namespace archive {
     std::vector<std::pair<zorba::Item, zorba::Item> > lObjectArray;
     std::pair<zorba::Item, zorba::Item> lElemPair;
 
-    //Item lMemberName;
-
     // create text content (i.e. path name)
     String lName = archive_entry_pathname(lEntry);
-    //Item lNameItem = theFactory->createString(lName);
-    //lMemberName = theFactory->createString("name");
-    lElemPair = std::make_pair<zorba::Item, zorba::Item>(theFactory->createString("name"),
+    lElemPair = std::make_pair<zorba::Item, zorba::Item>(gNameKey,
                                                          theFactory->createString(lName));
     lObjectArray.push_back(lElemPair);
 
@@ -1083,9 +1089,7 @@ namespace zorba { namespace archive {
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      //Item lSizeItem = theFactory->createInteger(lSize);
-      //lMemberName = theFactory->createString("size");
-      lElemPair = std::make_pair<zorba::Item, zorba::Item>(theFactory->createString("size"),
+      lElemPair = std::make_pair<zorba::Item, zorba::Item>(gSizeKey,
                                                            theFactory->createInteger(lSize));
       lObjectArray.push_back(lElemPair);
     }
@@ -1094,9 +1098,7 @@ namespace zorba { namespace archive {
     if (archive_entry_mtime_is_set(lEntry))
     {
       time_t lTime = archive_entry_mtime(lEntry);
-      //Item lModifiedItem = ArchiveModule::createDateTimeItem(lTime);
-      //lMemberName = theFactory->createString("last-modified");
-      lElemPair = std::make_pair<zorba::Item, zorba::Item>(theFactory->createString("last-modified"),
+      lElemPair = std::make_pair<zorba::Item, zorba::Item>(gLastModifiedKey,
                                                            ArchiveModule::createDateTimeItem(lTime));
       lObjectArray.push_back(lElemPair);
     }
@@ -1118,7 +1120,7 @@ namespace zorba { namespace archive {
     }
 
     //lMemberName = theFactory->createString("type");
-    lElemPair = std::make_pair<zorba::Item, zorba::Item>(theFactory->createString("type"),
+    lElemPair = std::make_pair<zorba::Item, zorba::Item>(gTypeKey,
                                                          theFactory->createString(lEntryType));
     lObjectArray.push_back(lElemPair);
 
@@ -1369,6 +1371,13 @@ namespace zorba { namespace archive {
     return ItemSequence_t(new OptionsItemSequence(lArchive));
   }
 
+  OptionsFunction::OptionsItemSequence::OptionsIterator::OptionsIterator(Item &aArchive)
+      :ArchiveIterator(aArchive)
+  {
+      gFormatKey = theFactory->createString(FORMAT_KEY_NAME);
+      gCompressionKey = theFactory->createString(COMPRESSION_KEY_NAME);
+  }
+
   bool
   OptionsFunction::OptionsItemSequence::OptionsIterator::next(
       zorba::Item& aRes)
@@ -1400,11 +1409,11 @@ namespace zorba { namespace archive {
       lCompression = "DEFLATE";
     }
 
-    lElemt = std::make_pair<zorba::Item, zorba::Item>(theFactory->createString("format"),
+    lElemt = std::make_pair<zorba::Item, zorba::Item>(gFormatKey,
                                                       theFactory->createString(lFormat));
     lJSONObject.push_back(lElemt);
 
-    lElemt = std::make_pair<zorba::Item, zorba::Item>(theFactory->createString("compression"),
+    lElemt = std::make_pair<zorba::Item, zorba::Item>(gCompressionKey,
                                                       theFactory->createString(lCompression));
     lJSONObject.push_back(lElemt);
 
@@ -1638,6 +1647,7 @@ namespace zorba { namespace archive {
     }
     // else? if the entry represents a directory what are we
     // going to return??
+    // answer: nothing, the directory will have no contents at all
 
     return true;
   }
