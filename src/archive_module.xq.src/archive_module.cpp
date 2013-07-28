@@ -165,6 +165,12 @@ namespace zorba { namespace archive {
     }
   }
 
+  zorba::Item&
+  ArchiveModule::getGlobalItems(enum ArchiveModule::GLOBAL_ITEMS g)
+  {
+      return globalFormatName;
+  }
+
 /*******************************************************************************
  ****************************** ArchiveFunction ********************************
  ******************************************************************************/
@@ -1408,7 +1414,7 @@ namespace zorba { namespace archive {
       lCompression = "DEFLATE";
     }
 
-    lElemt = std::make_pair<zorba::Item, zorba::Item>(gFormatKey,
+    lElemt = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::FORMAT),
                                                       theFactory->createString(lFormat));
     lJSONObject.push_back(lElemt);
 

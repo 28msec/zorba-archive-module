@@ -52,7 +52,16 @@ namespace zorba { namespace archive {
 
       FuncMap_t theFunctions;
 
+      static zorba::Item globalFormatName;
+
     public:
+
+      enum GLOBAL_ITEMS { FORMAT };
+
+      ArchiveModule()
+      {
+          globalFormatName = Zorba::getInstance(0)->getItemFactory()->createString("format");
+      }
 
       virtual ~ArchiveModule();
 
@@ -78,6 +87,8 @@ namespace zorba { namespace archive {
 
       static void
       parseDateTimeItem(const zorba::Item& i, time_t&);
+
+      static zorba::Item& getGlobalItems(enum GLOBAL_ITEMS g);
   };
 
 
