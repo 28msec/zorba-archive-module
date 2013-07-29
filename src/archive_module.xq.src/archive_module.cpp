@@ -52,18 +52,16 @@
 #define ERROR_CORRUPTED_ARCHIVE "CORRUPTED-ARCHIVE"
 #define ERROR_DIFFERENT_COMPRESSIONS_NOT_SUPPORTED "DIFFERENT-COMPRESSIONS-NOT-SUPPORTED"
 
-#define FORMAT_KEY_NAME "format"
-#define COMPRESSION_KEY_NAME "compression"
-#define NAME_KEY_NAME "name"
-#define TYPE_KEY_NAME "type"
-#define SIZE_KEY_NAME "size"
-#define LAST_MODIFIED_KEY_NAME "last-modified"
-#define ENCODING_KEY_NAME "encoding"
-
 namespace zorba { namespace archive {
 
-
-zorba::Item ArchiveModule::globalFormatName;
+// Allocating global keys
+zorba::Item ArchiveModule::globalFormatKey;
+zorba::Item ArchiveModule::globalCompressionKey;
+zorba::Item ArchiveModule::globalNameKey;
+zorba::Item ArchiveModule::globalTypeKey;
+zorba::Item ArchiveModule::globalSizeKey;
+zorba::Item ArchiveModule::globalLastModifiedKey;
+zorba::Item ArchiveModule::globalEncodingKey;
 
 /*******************************************************************************
  ******************************************************************************/
@@ -170,7 +168,18 @@ zorba::Item ArchiveModule::globalFormatName;
   zorba::Item&
   ArchiveModule::getGlobalItems(enum ArchiveModule::GLOBAL_ITEMS g)
   {
-      return globalFormatName;
+      switch(g)
+      {
+      case FORMAT: return globalFormatKey;
+      case COMPRESSION: return globalCompressionKey;
+      case NAME: return globalNameKey;
+      case TYPE: return globalTypeKey;
+      case SIZE: return globalSizeKey;
+      case LAST_MODIFIED: return globalLastModifiedKey;
+      case ENCODING: return globalEncodingKey;
+      // we should never touch the default clause but ...
+      default: return globalFormatKey;
+      }
   }
 
 /*******************************************************************************
@@ -242,11 +251,11 @@ zorba::Item ArchiveModule::globalFormatName;
         Item lKeyValue;
         lKeyValue = aEntry.getObjectValue(lKey.getStringValue());
 
-        if(lKey.getStringValue() == NAME_KEY_NAME)
+        if(lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::NAME).getStringValue())
         {
           theEntryPath = lKeyValue.getStringValue();
         }
-        else if(lKey.getStringValue() == TYPE_KEY_NAME)
+        else if(lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::TYPE).getStringValue())
         {
           String filetype = lKeyValue.getStringValue();
           if(filetype == "directory")
@@ -254,11 +263,11 @@ zorba::Item ArchiveModule::globalFormatName;
             theEntryType = directory;
           }
         }
-        else if (lKey.getStringValue() == LAST_MODIFIED_KEY_NAME)
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::LAST_MODIFIED).getStringValue())
         {
           ArchiveModule::parseDateTimeItem(lKeyValue, theLastModified);
         }
-        else if (lKey.getStringValue() == ENCODING_KEY_NAME)
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::ENCODING).getStringValue())
         {
           theEncoding = lKeyValue.getStringValue();
           std::transform(
@@ -272,13 +281,17 @@ zorba::Item ArchiveModule::globalFormatName;
             throwError(ERROR_INVALID_ENCODING, lMsg.str().c_str());
           }
         }
-        else if (lKey.getStringValue() == COMPRESSION_KEY_NAME)
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::COMPRESSION).getStringValue())
         {
           theCompression = lKeyValue.getStringValue();
           std::transform(
               theCompression.begin(),
               theCompression.end(),
               theCompression.begin(), ::toupper);
+        }
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::SIZE).getStringValue())
+        {
+            theSize = lKeyValue.getLongValue();
         }
       }
     } else
@@ -317,7 +330,7 @@ zorba::Item ArchiveModule::globalFormatName;
         Item lOptionValue;
         lOptionValue = aOptions.getObjectValue(lOptionKey.getStringValue());
 
-        if (lOptionKey.getStringValue() == COMPRESSION_KEY_NAME)
+        if (lOptionKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::COMPRESSION).getStringValue())
         {
           theCompression = lOptionValue.getStringValue().c_str();
           std::transform(
@@ -325,7 +338,7 @@ zorba::Item ArchiveModule::globalFormatName;
               theCompression.end(),
               theCompression.begin(), ::toupper);
         }
-        else if (lOptionKey.getStringValue() == FORMAT_KEY_NAME)
+        else if (lOptionKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::FORMAT).getStringValue())
         {
           theFormat = lOptionValue.getStringValue().c_str();
           std::transform(
@@ -1064,10 +1077,6 @@ zorba::Item ArchiveModule::globalFormatName;
       zorba::Item& aArchive)
     : ArchiveIterator(aArchive)
   {
-      gNameKey = theFactory->createString(NAME_KEY_NAME);
-      gTypeKey = theFactory->createString(TYPE_KEY_NAME);
-      gSizeKey = theFactory->createString(SIZE_KEY_NAME);
-      gLastModifiedKey = theFactory->createString(LAST_MODIFIED_KEY_NAME);
   }
 
   bool
@@ -1089,7 +1098,7 @@ zorba::Item ArchiveModule::globalFormatName;
 
     // create text content (i.e. path name)
     String lName = archive_entry_pathname(lEntry);
-    lElemPair = std::make_pair<zorba::Item, zorba::Item>(gNameKey,
+    lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::NAME),
                                                          theFactory->createString(lName));
     lObjectArray.push_back(lElemPair);
 
@@ -1097,7 +1106,7 @@ zorba::Item ArchiveModule::globalFormatName;
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      lElemPair = std::make_pair<zorba::Item, zorba::Item>(gSizeKey,
+      lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::SIZE),
                                                            theFactory->createInteger(lSize));
       lObjectArray.push_back(lElemPair);
     }
@@ -1106,7 +1115,7 @@ zorba::Item ArchiveModule::globalFormatName;
     if (archive_entry_mtime_is_set(lEntry))
     {
       time_t lTime = archive_entry_mtime(lEntry);
-      lElemPair = std::make_pair<zorba::Item, zorba::Item>(gLastModifiedKey,
+      lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::LAST_MODIFIED),
                                                            ArchiveModule::createDateTimeItem(lTime));
       lObjectArray.push_back(lElemPair);
     }
@@ -1127,7 +1136,7 @@ zorba::Item ArchiveModule::globalFormatName;
       // for the time being don't do anything
     }
 
-    lElemPair = std::make_pair<zorba::Item, zorba::Item>(gTypeKey,
+    lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::TYPE),
                                                          theFactory->createString(lEntryType));
     lObjectArray.push_back(lElemPair);
 
@@ -1381,8 +1390,6 @@ zorba::Item ArchiveModule::globalFormatName;
   OptionsFunction::OptionsItemSequence::OptionsIterator::OptionsIterator(Item &aArchive)
       :ArchiveIterator(aArchive)
   {
-      gFormatKey = theFactory->createString(FORMAT_KEY_NAME);
-      gCompressionKey = theFactory->createString(COMPRESSION_KEY_NAME);
   }
 
   bool
@@ -1420,7 +1427,7 @@ zorba::Item ArchiveModule::globalFormatName;
                                                       theFactory->createString(lFormat));
     lJSONObject.push_back(lElemt);
 
-    lElemt = std::make_pair<zorba::Item, zorba::Item>(gCompressionKey,
+    lElemt = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::COMPRESSION),
                                                       theFactory->createString(lCompression));
     lJSONObject.push_back(lElemt);
 

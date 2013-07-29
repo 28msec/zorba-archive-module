@@ -52,15 +52,27 @@ namespace zorba { namespace archive {
 
       FuncMap_t theFunctions;
 
-      static zorba::Item globalFormatName;
+      static zorba::Item globalFormatKey;
+      static zorba::Item globalCompressionKey;
+      static zorba::Item globalNameKey;
+      static zorba::Item globalTypeKey;
+      static zorba::Item globalSizeKey;
+      static zorba::Item globalLastModifiedKey;
+      static zorba::Item globalEncodingKey;
 
     public:
 
-      enum GLOBAL_ITEMS { FORMAT };
+      enum GLOBAL_ITEMS { FORMAT, COMPRESSION, NAME, TYPE, SIZE, LAST_MODIFIED, ENCODING };
 
       ArchiveModule()
       {
-          globalFormatName = Zorba::getInstance(0)->getItemFactory()->createString("format");
+          globalFormatKey = Zorba::getInstance(0)->getItemFactory()->createString("format");
+          globalCompressionKey = Zorba::getInstance(0)->getItemFactory()->createString("compression");
+          globalNameKey = Zorba::getInstance(0)->getItemFactory()->createString("name");
+          globalTypeKey = Zorba::getInstance(0)->getItemFactory()->createString("type");
+          globalSizeKey = Zorba::getInstance(0)->getItemFactory()->createString("size");
+          globalLastModifiedKey = Zorba::getInstance(0)->getItemFactory()->createString("last-modified");
+          globalEncodingKey = Zorba::getInstance(0)->getItemFactory()->createString("encoding");
       }
 
       virtual ~ArchiveModule();
@@ -395,12 +407,6 @@ namespace zorba { namespace archive {
 
               bool
               next(zorba::Item& aItem);
-
-              zorba::Item gNameKey;
-              zorba::Item gTypeKey;
-              zorba::Item gSizeKey;
-              zorba::Item gLastModifiedKey;
-
           };
 
         public:
@@ -631,9 +637,6 @@ namespace zorba { namespace archive {
 
             bool
             next(zorba::Item& aItem);
-
-            zorba::Item gFormatKey;
-            zorba::Item gCompressionKey;
 
           protected:
             bool lExhausted;
