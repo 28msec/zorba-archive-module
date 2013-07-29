@@ -63,6 +63,8 @@
 namespace zorba { namespace archive {
 
 
+zorba::Item ArchiveModule::globalFormatName;
+
 /*******************************************************************************
  ******************************************************************************/
   zorba::ExternalFunction*
