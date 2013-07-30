@@ -1,2 +1,1 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<options xmlns="http://www.zorba-xquery.com/modules/archive"><format>ZIP</format><compression>DEFLATE</compression></options><options xmlns="http://www.zorba-xquery.com/modules/archive"><format>TAR</format><compression>GZIP</compression></options>
+{ "format" : "ZIP", "compression" : "DEFLATE" }{ "format" : "TAR", "compression" : "GZIP" }

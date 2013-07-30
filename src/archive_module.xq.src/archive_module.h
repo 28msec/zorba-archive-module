@@ -52,7 +52,28 @@ namespace zorba { namespace archive {
 
       FuncMap_t theFunctions;
 
+      static zorba::Item globalFormatKey;
+      static zorba::Item globalCompressionKey;
+      static zorba::Item globalNameKey;
+      static zorba::Item globalTypeKey;
+      static zorba::Item globalSizeKey;
+      static zorba::Item globalLastModifiedKey;
+      static zorba::Item globalEncodingKey;
+
     public:
+
+      enum GLOBAL_ITEMS { FORMAT, COMPRESSION, NAME, TYPE, SIZE, LAST_MODIFIED, ENCODING };
+
+      ArchiveModule()
+      {
+          globalFormatKey = Zorba::getInstance(0)->getItemFactory()->createString("format");
+          globalCompressionKey = Zorba::getInstance(0)->getItemFactory()->createString("compression");
+          globalNameKey = Zorba::getInstance(0)->getItemFactory()->createString("name");
+          globalTypeKey = Zorba::getInstance(0)->getItemFactory()->createString("type");
+          globalSizeKey = Zorba::getInstance(0)->getItemFactory()->createString("size");
+          globalLastModifiedKey = Zorba::getInstance(0)->getItemFactory()->createString("last-modified");
+          globalEncodingKey = Zorba::getInstance(0)->getItemFactory()->createString("encoding");
+      }
 
       virtual ~ArchiveModule();
 
@@ -71,7 +92,7 @@ namespace zorba { namespace archive {
       }
 
       static zorba::String
-      getModuleURI() { return "http://www.zorba-xquery.com/modules/archive"; }
+      getModuleURI() { return "http://zorba.io/modules/archive"; }
 
       static zorba::Item
       createDateTimeItem(time_t&);
@@ -79,6 +100,7 @@ namespace zorba { namespace archive {
       static void
       parseDateTimeItem(const zorba::Item& i, time_t&);
 
+      static zorba::Item& getGlobalItems(enum GLOBAL_ITEMS g);
   };
 
 
@@ -602,8 +624,7 @@ namespace zorba { namespace archive {
         class OptionsIterator : public ArchiveIterator
         {
           public:
-            OptionsIterator(zorba::Item& aArchive)
-              : ArchiveIterator(aArchive) {}
+            OptionsIterator(zorba::Item& aArchive);
 
             virtual ~OptionsIterator() {}
 
@@ -755,7 +776,6 @@ namespace zorba { namespace archive {
               ArchiveOptions& theOptions;
           };
 
-        //public:
           DeleteItemSequence(zorba::Item& aArchive)
             : ExtractFunction::ExtractItemSequence(aArchive, false) {}
 

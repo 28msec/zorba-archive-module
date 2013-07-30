@@ -1,12 +1,12 @@
-import module namespace a = "http://www.zorba-xquery.com/modules/archive";
+import module namespace a = "http://zorba.io/modules/archive";
 
 let $foo-content := "<foo/>"
 let $bar-content := xs:base64Binary("YWJj")
 let $options := 
-<a:options>
- <a:format>TAR</a:format>
- <a:compression>GZIP</a:compression>
-</a:options>
+{
+  "format" : "TAR",
+  "compression" : "GZIP"
+}
 let $archive0 := a:create(
   ("foo.xml"),
   ($foo-content),

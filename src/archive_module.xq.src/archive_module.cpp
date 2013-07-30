@@ -45,8 +45,23 @@
 #include "archive_module.h"
 #include "config.h"
 
+#define ERROR_ENTRY_COUNT_MISMATCH "ENTRY-COUNT"
+#define ERROR_INVALID_OPTIONS "INVALID-OPTIONS"
+#define ERROR_INVALID_ENTRY_VALS "INVALID-ENTRY-VALS"
+#define ERROR_INVALID_ENCODING "INVALID-ENCODING"
+#define ERROR_CORRUPTED_ARCHIVE "CORRUPTED-ARCHIVE"
+#define ERROR_DIFFERENT_COMPRESSIONS_NOT_SUPPORTED "DIFFERENT-COMPRESSIONS-NOT-SUPPORTED"
+
 namespace zorba { namespace archive {
 
+// Allocating global keys
+zorba::Item ArchiveModule::globalFormatKey;
+zorba::Item ArchiveModule::globalCompressionKey;
+zorba::Item ArchiveModule::globalNameKey;
+zorba::Item ArchiveModule::globalTypeKey;
+zorba::Item ArchiveModule::globalSizeKey;
+zorba::Item ArchiveModule::globalLastModifiedKey;
+zorba::Item ArchiveModule::globalEncodingKey;
 
 /*******************************************************************************
  ******************************************************************************/
@@ -146,10 +161,26 @@ namespace zorba { namespace archive {
       std::ostringstream lMsg;
       lMsg << i.getStringValue()
         << ": invalid value for last-modified attribute ";
-      ArchiveFunction::throwError("ARCH0003", lMsg.str().c_str());
+      ArchiveFunction::throwError(ERROR_INVALID_ENTRY_VALS, lMsg.str().c_str());
     }
   }
 
+  zorba::Item&
+  ArchiveModule::getGlobalItems(enum ArchiveModule::GLOBAL_ITEMS g)
+  {
+      switch(g)
+      {
+      case FORMAT: return globalFormatKey;
+      case COMPRESSION: return globalCompressionKey;
+      case NAME: return globalNameKey;
+      case TYPE: return globalTypeKey;
+      case SIZE: return globalSizeKey;
+      case LAST_MODIFIED: return globalLastModifiedKey;
+      case ENCODING: return globalEncodingKey;
+      // we should never touch the default clause but ...
+      default: return globalFormatKey;
+      }
+  }
 
 /*******************************************************************************
  ****************************** ArchiveFunction ********************************
@@ -209,34 +240,36 @@ namespace zorba { namespace archive {
   void
   ArchiveFunction::ArchiveEntry::setValues(zorba::Item& aEntry)
   {
-    theEntryPath = aEntry.getStringValue();
-
-    if (aEntry.isNode())
+    if (aEntry.isJSONItem())
     {
-      Item lAttr;
+      Item lKey;
 
-      Iterator_t lAttrIter = aEntry.getAttributes();
-      lAttrIter->open();
-      while (lAttrIter->next(lAttr))
+      Iterator_t lKeyIter = aEntry.getObjectKeys();
+      lKeyIter->open();
+      while (lKeyIter->next(lKey))
       {
-        Item lAttrName;
-        lAttr.getNodeName(lAttrName);
+        Item lKeyValue;
+        lKeyValue = aEntry.getObjectValue(lKey.getStringValue());
 
-        if(lAttrName.getLocalName() == "type")
+        if(lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::NAME).getStringValue())
         {
-          String filetype = lAttr.getStringValue();
+          theEntryPath = lKeyValue.getStringValue();
+        }
+        else if(lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::TYPE).getStringValue())
+        {
+          String filetype = lKeyValue.getStringValue();
           if(filetype == "directory")
           {
             theEntryType = directory;
           }
         }
-        else if (lAttrName.getLocalName() == "last-modified")
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::LAST_MODIFIED).getStringValue())
         {
-          ArchiveModule::parseDateTimeItem(lAttr, theLastModified);
+          ArchiveModule::parseDateTimeItem(lKeyValue, theLastModified);
         }
-        else if (lAttrName.getLocalName() == "encoding")
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::ENCODING).getStringValue())
         {
-          theEncoding = lAttr.getStringValue();
+          theEncoding = lKeyValue.getStringValue();
           std::transform(
               theEncoding.begin(), theEncoding.end(),
               theEncoding.begin(), ::toupper);
@@ -245,19 +278,24 @@ namespace zorba { namespace archive {
             std::ostringstream lMsg;
             lMsg << theEncoding << ": unsupported encoding";
               
-            throwError("ARCH0004", lMsg.str().c_str());
+            throwError(ERROR_INVALID_ENCODING, lMsg.str().c_str());
           }
         }
-        else if (lAttrName.getLocalName() == "compression")
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::COMPRESSION).getStringValue())
         {
-          theCompression = lAttr.getStringValue();
+          theCompression = lKeyValue.getStringValue();
           std::transform(
               theCompression.begin(),
               theCompression.end(),
               theCompression.begin(), ::toupper);
         }
+        else if (lKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::SIZE).getStringValue())
+        {
+            theSize = lKeyValue.getLongValue();
+        }
       }
-    }
+    } else
+        theEntryPath = aEntry.getStringValue();
   }
 
   /********************
@@ -281,66 +319,67 @@ namespace zorba { namespace archive {
   void
   ArchiveFunction::ArchiveOptions::setValues(Item& aOptions)
   {
-    Item lOption;
-
-    Iterator_t lOptionIter = aOptions.getChildren();
-    lOptionIter->open();
-
-    while (lOptionIter->next(lOption))
+    if(aOptions.isJSONItem())
     {
-      Item lOptionName;
-      lOption.getNodeName(lOptionName);
+      Item lOptionKey;
+      Iterator_t lKeyIter = aOptions.getObjectKeys();
+      lKeyIter->open();
 
-      if (lOptionName.getLocalName() == "compression")
+      while (lKeyIter->next(lOptionKey))
       {
-        theCompression = lOption.getStringValue().c_str();
-        std::transform(
-            theCompression.begin(),
-            theCompression.end(),
-            theCompression.begin(), ::toupper);
+        Item lOptionValue;
+        lOptionValue = aOptions.getObjectValue(lOptionKey.getStringValue());
+
+        if (lOptionKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::COMPRESSION).getStringValue())
+        {
+          theCompression = lOptionValue.getStringValue().c_str();
+          std::transform(
+              theCompression.begin(),
+              theCompression.end(),
+              theCompression.begin(), ::toupper);
+        }
+        else if (lOptionKey.getStringValue() == ArchiveModule::getGlobalItems(ArchiveModule::FORMAT).getStringValue())
+        {
+          theFormat = lOptionValue.getStringValue().c_str();
+          std::transform(
+              theFormat.begin(),
+              theFormat.end(),
+              theFormat.begin(), ::toupper);
+        }
+        else if (lOptionKey.getStringValue() == "skip-extra-attributes")
+        {
+          theSkipExtraAttrs = lOptionValue.getStringValue() == "true" ? true : false;
+        }
       }
-      else if (lOptionName.getLocalName() == "format")
+      if (theFormat == "ZIP")
       {
-        theFormat = lOption.getStringValue().c_str();
-        std::transform(
-            theFormat.begin(),
-            theFormat.end(),
-            theFormat.begin(), ::toupper);
+        if (theCompression != "STORE" && theCompression != "DEFLATE" && theCompression != "NONE")
+        {
+          std::ostringstream lMsg;
+          lMsg
+            << theCompression
+            << ": compression algorithm not supported for ZIP format (required: deflate, store)";
+          throwError(ERROR_INVALID_OPTIONS, lMsg.str().c_str());
+        }
       }
-      else if (lOptionName.getLocalName() == "skip-extra-attributes")
-      {
-        theSkipExtraAttrs = lOption.getStringValue() == "true" ? true : false;
-      }
-    }
-    if (theFormat == "ZIP")
-    {
-      if (theCompression != "STORE" && theCompression != "DEFLATE" && theCompression != "NONE")
-      {
-        std::ostringstream lMsg;
-        lMsg
-          << theCompression
-          << ": compression algorithm not supported for ZIP format (required: deflate, store)";
-        throwError("ARCH0002", lMsg.str().c_str());
-      }
-    }
-    if (theFormat == "TAR")
-    {
-      if (theCompression != "GZIP"
+      if (theFormat == "TAR")
+      {        if (theCompression != "GZIP"
 #ifndef WIN32
-          && theCompression != "BZIP2"
-          && theCompression != "LZMA"
+            && theCompression != "BZIP2"
+            && theCompression != "LZMA"
 #endif
-        )
-      {
-        std::ostringstream lMsg;
-        lMsg
-          << theCompression
-          << ": compression algorithm not supported for TAR format (required: gzip"
+          )
+        {
+          std::ostringstream lMsg;
+          lMsg
+            << theCompression
+            << ": compression algorithm not supported for TAR format (required: gzip"
 #ifndef WIN32
-          << ", bzip2, lzma"
+            << ", bzip2, lzma"
 #endif
-          << ")";
-        throwError("ARCH0002", lMsg.str().c_str());
+            << ")";
+          throwError(ERROR_INVALID_OPTIONS, lMsg.str().c_str());
+        }
       }
     }
   }
@@ -550,7 +589,7 @@ namespace zorba { namespace archive {
 
     if (!theArchive)
       ArchiveFunction::throwError(
-        "ARCH9999", "internal error (couldn't create archive)");
+        ERROR_CORRUPTED_ARCHIVE, "internal error (couldn't create archive)");
 
     setOptions(aOptions);
   }
@@ -572,7 +611,7 @@ namespace zorba { namespace archive {
           std::ostringstream lMsg;
           lMsg << "number of entries (" << aEntries.size()
             << ") doesn't match number of content arguments (" << i << ")";
-          throwError("ARCH0001", lMsg.str().c_str());
+          throwError(ERROR_ENTRY_COUNT_MISMATCH, lMsg.str().c_str());
         }
       }
 
@@ -587,7 +626,7 @@ namespace zorba { namespace archive {
       std::ostringstream lMsg;
       lMsg << "number of entries (" << aEntries.size()
         << ") less than number of content arguments";
-      throwError("ARCH0001", lMsg.str().c_str());
+      throwError(ERROR_ENTRY_COUNT_MISMATCH, lMsg.str().c_str());
     }
 
     aFiles->close();
@@ -601,7 +640,6 @@ namespace zorba { namespace archive {
 
       archive_entry_set_pathname(theEntry, aEntry.getEntryPath().c_str());
       archive_entry_set_mtime(theEntry, aEntry.getLastModified(), 0);
-      // TODO: modified to allow the creation of empty directories
       if(aEntry.getEntryType() == ArchiveEntry::regular){
         archive_entry_set_filetype(theEntry, AE_IFREG);
         lDeleteStream = getStream(
@@ -626,7 +664,7 @@ namespace zorba { namespace archive {
 #ifndef ZORBA_LIBARCHIVE_HAVE_SET_COMPRESSION
           std::ostringstream lMsg;
           lMsg << lNextCompString << ": setting different compression algorithms for each entry is not supported by the used version of libarchive";
-          throwError("ARCH0099", lMsg.str().c_str());
+          throwError(ERROR_DIFFERENT_COMPRESSIONS_NOT_SUPPORTED, lMsg.str().c_str());
 #endif
         }
         else
@@ -638,7 +676,7 @@ namespace zorba { namespace archive {
         {
           std::ostringstream lMsg;
           lMsg << lNextCompString << ": compression algorithm not supported for ZIP format (required: deflate, store)";
-          throwError("ARCH0002", lMsg.str().c_str());
+          throwError(ERROR_INVALID_OPTIONS, lMsg.str().c_str());
         }
 
 #ifdef ZORBA_LIBARCHIVE_HAVE_SET_COMPRESSION
@@ -651,7 +689,7 @@ namespace zorba { namespace archive {
         {
           std::ostringstream lMsg;
           lMsg << aEntry.getCompression() << ": compression attribute only allowed for zip format";
-          throwError("ARCH0099", lMsg.str().c_str());
+          throwError(ERROR_DIFFERENT_COMPRESSIONS_NOT_SUPPORTED, lMsg.str().c_str());
         }
       }
 
@@ -718,7 +756,7 @@ namespace zorba { namespace archive {
     {
       if (!aLocalName)
       {
-        throwError("ARCH9999", archive_error_string(a));
+        throwError(ERROR_CORRUPTED_ARCHIVE, archive_error_string(a));
       }
       else
       {
@@ -781,7 +819,7 @@ namespace zorba { namespace archive {
     {
       std::ostringstream lMsg;
       lMsg << f << ": archive format not supported";
-      throwError("ARCH0002", lMsg.str().c_str());
+      throwError(ERROR_INVALID_OPTIONS, lMsg.str().c_str());
     }
     return 0;
   }
@@ -817,7 +855,7 @@ namespace zorba { namespace archive {
     {
       std::ostringstream lMsg;
       lMsg << c << ": compression algorithm not supported";
-      throwError("ARCH0002", lMsg.str().c_str());
+      throwError(ERROR_INVALID_OPTIONS, lMsg.str().c_str());
     }
     return 0;
   }
@@ -897,7 +935,7 @@ namespace zorba { namespace archive {
 
     if (!theArchive)
       ArchiveFunction::throwError(
-          "ARCH9999", "internal error (couldn't create archive)");
+          ERROR_CORRUPTED_ARCHIVE, "internal error (couldn't create archive)");
 
 	  int lErr = archive_read_support_compression_all(theArchive);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
@@ -1039,15 +1077,6 @@ namespace zorba { namespace archive {
       zorba::Item& aArchive)
     : ArchiveIterator(aArchive)
   {
-    theUntypedQName = theFactory->createQName(
-        "http://www.w3.org/2001/XMLSchema", "untyped");
-
-    theEntryName = theFactory->createQName(
-        ArchiveModule::getModuleURI(), "entry");
-
-    theLastModifiedName = theFactory->createQName("", "last-modified");
-    theUncompressedSizeName = theFactory->createQName("", "size");
-    theEntryType = theFactory->createQName("", "type");
   }
 
   bool
@@ -1064,49 +1093,42 @@ namespace zorba { namespace archive {
       ArchiveFunction::checkForError(lErr, 0, theArchive);
     }
 
-    Item lNoParent;
-
-    Item lType = theUntypedQName;
-
-    // create entry element
-    aRes = theFactory->createElementNode(
-        lNoParent, theEntryName, lType, true, false, NsBindings());
+    std::vector<std::pair<zorba::Item, zorba::Item> > lObjectArray;
+    std::pair<zorba::Item, zorba::Item> lElemPair;
 
     // create text content (i.e. path name)
     String lName = archive_entry_pathname(lEntry);
-    Item lNameItem = theFactory->createString(lName);
-    theFactory->assignElementTypedValue(aRes, lNameItem);
+    lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::NAME),
+                                                         theFactory->createString(lName));
+    lObjectArray.push_back(lElemPair);
 
     // create size attr if the value is set in the archive
     if (archive_entry_size_is_set(lEntry))
     {
       long long lSize = archive_entry_size(lEntry);
-      Item lSizeItem = theFactory->createInteger(lSize);
-      lType = theUntypedQName;
-      theFactory->createAttributeNode(
-          aRes, theUncompressedSizeName, lType, lSizeItem);
+      lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::SIZE),
+                                                           theFactory->createInteger(lSize));
+      lObjectArray.push_back(lElemPair);
     }
 
     // create last-modified attr if the value is set in the archive
     if (archive_entry_mtime_is_set(lEntry))
     {
       time_t lTime = archive_entry_mtime(lEntry);
-      Item lModifiedItem = ArchiveModule::createDateTimeItem(lTime);
-
-      lType = theUntypedQName;
-      theFactory->createAttributeNode(
-          aRes, theLastModifiedName, lType, lModifiedItem);
+      lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::LAST_MODIFIED),
+                                                           ArchiveModule::createDateTimeItem(lTime));
+      lObjectArray.push_back(lElemPair);
     }
 
-    Item lEntryType;
+    std::string lEntryType;
     if(archive_entry_filetype(lEntry) == AE_IFDIR)
     {
       // this entry is a directory
-      lEntryType = theFactory->createString("directory");
+      lEntryType = "directory";
     }
     else if(archive_entry_filetype(lEntry) == AE_IFREG)
     {
-      lEntryType = theFactory->createString("regular");
+      lEntryType = "regular";
     }
     else
     {
@@ -1114,13 +1136,15 @@ namespace zorba { namespace archive {
       // for the time being don't do anything
     }
 
-    lType = theUntypedQName;
-    theFactory->createAttributeNode(
-      aRes, theEntryType, lType, lEntryType);
+    lElemPair = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::TYPE),
+                                                         theFactory->createString(lEntryType));
+    lObjectArray.push_back(lElemPair);
 
     // skip to the next entry and raise an error if that fails
     lErr = archive_read_data_skip(theArchive);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
+
+    aRes = theFactory->createJSONObject(lObjectArray);
 
     return true;
   }
@@ -1190,7 +1214,7 @@ namespace zorba { namespace archive {
         std::ostringstream lMsg;
         lMsg << lEncoding << ": unsupported encoding";
           
-        throwError("ARCH0004", lMsg.str().c_str());
+        throwError(ERROR_INVALID_ENCODING, lMsg.str().c_str());
       }
     }
     
@@ -1363,6 +1387,11 @@ namespace zorba { namespace archive {
     return ItemSequence_t(new OptionsItemSequence(lArchive));
   }
 
+  OptionsFunction::OptionsItemSequence::OptionsIterator::OptionsIterator(Item &aArchive)
+      :ArchiveIterator(aArchive)
+  {
+  }
+
   bool
   OptionsFunction::OptionsItemSequence::OptionsIterator::next(
       zorba::Item& aRes)
@@ -1372,6 +1401,9 @@ namespace zorba { namespace archive {
     lExhausted = true;
 
     struct archive_entry *lEntry;
+    typedef std::pair<zorba::Item, zorba::Item> tArrElemt;
+    tArrElemt lElemt;
+    std::vector<tArrElemt> lJSONObject;
 
     // to get the format, we need to peek into the first header
     int lErr = archive_read_next_header(theArchive, &lEntry);
@@ -1391,33 +1423,15 @@ namespace zorba { namespace archive {
       lCompression = "DEFLATE";
     }
 
-    zorba::Item lUntypedQName = theFactory->createQName(
-        "http://www.w3.org/2001/XMLSchema", "untyped");
-    zorba::Item lTmpQName = lUntypedQName;
+    lElemt = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::FORMAT),
+                                                      theFactory->createString(lFormat));
+    lJSONObject.push_back(lElemt);
 
-    zorba::Item lOptionsQName = theFactory->createQName(
-        ArchiveModule::getModuleURI(), "options");
+    lElemt = std::make_pair<zorba::Item, zorba::Item>(ArchiveModule::getGlobalItems(ArchiveModule::COMPRESSION),
+                                                      theFactory->createString(lCompression));
+    lJSONObject.push_back(lElemt);
 
-    zorba::Item lFormatQName = theFactory->createQName(
-        ArchiveModule::getModuleURI(), "format");
-
-    zorba::Item lCompressionQName = theFactory->createQName(
-        ArchiveModule::getModuleURI(), "compression");
-
-    zorba::Item lNoParent;
-    aRes = theFactory->createElementNode(
-        lNoParent, lOptionsQName, lTmpQName, true, false, NsBindings());
-
-    lTmpQName = lUntypedQName;
-    zorba::Item lFormatItem = theFactory->createElementNode(
-        aRes, lFormatQName, lTmpQName, true, false, NsBindings());
-
-    lTmpQName = lUntypedQName;
-    zorba::Item lCompressionItem = theFactory->createElementNode(
-        aRes, lCompressionQName, lTmpQName, true, false, NsBindings());
-
-    theFactory->createTextNode(lFormatItem, lFormat);
-    theFactory->createTextNode(lCompressionItem, lCompression);
+    aRes = theFactory->createJSONObject(lJSONObject);
 
     return true;
   }
@@ -1647,6 +1661,7 @@ namespace zorba { namespace archive {
     }
     // else? if the entry represents a directory what are we
     // going to return??
+    // answer: nothing, the directory will have no contents at all
 
     return true;
   }

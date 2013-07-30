@@ -1,4 +1,4 @@
-import module namespace a = "http://www.zorba-xquery.com/modules/archive";
+import module namespace a = "http://zorba.io/modules/archive";
 import module namespace b = "http://zorba.io/modules/base64";
 
 let $foo-content := "<foo/>"

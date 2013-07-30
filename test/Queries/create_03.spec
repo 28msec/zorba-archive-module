@@ -1,1 +1,1 @@
-Error: http://www.zorba-xquery.com/modules/archive:ARCH0099
+Error: http://zorba.io/modules/archive:DIFFERENT-COMPRESSIONS-NOT-SUPPORTED
