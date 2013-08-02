@@ -530,10 +530,7 @@ zorba::Item ArchiveModule::globalEncodingKey;
 
       if (aFile.isEncoded())
       {
-        zorba::String lEncoded(lBinValue, lResFileSize);
-        zorba::String lDecoded = zorba::base64::decode(lEncoded);
-        lStream->write(lDecoded.c_str(), lDecoded.length());
-        aResFileSize = lDecoded.size();
+        aResFileSize = zorba::base64::decode(lBinValue, lResFileSize, *lStream);
       }
       else
       {
@@ -967,8 +964,7 @@ zorba::Item ArchiveModule::globalEncodingKey;
 
       if (theArchiveItem.isEncoded())
       {
-        zorba::String lEncoded(lData, lLen); 
-        theDecodedData = base64::decode(lEncoded);
+        base64::decode(lData, lLen, &theDecodedData);
         lLen = theDecodedData.size();
         lErr = archive_read_open_memory(theArchive,
             const_cast<char*>(theDecodedData.c_str()), lLen);
