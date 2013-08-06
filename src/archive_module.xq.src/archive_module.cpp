@@ -27,8 +27,10 @@
 # include <sys/time.h>
 #endif
 #ifdef WIN32
-# include <strptime.h>
+# include "strptime.h"
+#ifndef _WIN64
 # include <MMSystem.h>
+#endif
 #endif
 
 #include <zorba/diagnostic_list.h>
@@ -890,11 +892,8 @@ zorba::Item ArchiveModule::globalEncodingKey;
     ArchiveFunction::checkForError(lErr, 0, a);
   }
 
-#ifdef WIN32
-  long
-#else
-  ssize_t
-#endif    
+
+  _ssize_t 
   ArchiveItemSequence::readStream(struct archive*, void *data, const void **buff)
   {
     ArchiveItemSequence::CallbackData* lData =
@@ -987,11 +986,8 @@ zorba::Item ArchiveModule::globalEncodingKey;
     theArchive = 0;
   }
 
-#ifdef WIN32
-  long
-#else
-  ssize_t
-#endif
+
+  _ssize_t
   ArchiveFunction::writeStream(
       struct archive *,
       void *func,
