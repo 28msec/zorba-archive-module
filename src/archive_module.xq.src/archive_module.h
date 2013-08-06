@@ -32,8 +32,15 @@
 #define ZORBA_ARCHIVE_COMPRESSION_DEFLATE 50
 #define ZORBA_ARCHIVE_COMPRESSION_STORE   51
 
-
 namespace zorba { namespace archive {
+
+#ifdef _WIN64
+  typedef long long _ssize_t;
+#elif WIN32
+  typedef long _ssize_t;
+#else
+  typedef ssize_t _ssize_t;
+#endif
 
 /*******************************************************************************
  ******************************************************************************/
@@ -143,11 +150,8 @@ namespace zorba { namespace archive {
       virtual ~ArchiveItemSequence() {}
 
     protected:
-#ifdef WIN32
-      static long
-#else
-      static ssize_t
-#endif    
+
+      static _ssize_t  
       readStream(struct archive *a, void *client_data, const void **buff);
 
       // needed for the "non-linear" zip format
@@ -301,11 +305,8 @@ namespace zorba { namespace archive {
       static zorba::Item
       getOneItem(const Arguments_t& aArgs, int aIndex);
 
-#ifdef WIN32
-      static long
-#else
-      static ssize_t
-#endif    
+
+      static _ssize_t  
       writeStream(struct archive *a, void *client_data, const void *buff, size_t n);
 
       static int
