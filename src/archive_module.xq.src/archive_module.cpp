@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <memory>
 #include <sys/types.h>
 
 #include <sys/timeb.h>
