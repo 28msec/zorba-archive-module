@@ -32,7 +32,7 @@ jsoniq version "1.0";
  : @author Luis Rodgriguez, Juan Zacarias, and Matthias Brantner
  :
  : @library <a href="http://code.google.com/p/libarchive/">libarchive</a>
- : @project Zorba/Archive
+ : @project Zorba/Archive/Archive
  :)
 module namespace a = "http://zorba.io/modules/archive";
  
