@@ -30,6 +30,7 @@
 #ifdef WIN32
 # include "strptime.h"
 #ifndef _WIN64
+# include <Windows.h>
 # include <MMSystem.h>
 #endif
 #endif
@@ -168,7 +169,7 @@ zorba::Item ArchiveModule::globalEncodingKey;
     }
   }
 
-  zorba::Item&
+  zorba::Item
   ArchiveModule::getGlobalItems(enum ArchiveModule::GLOBAL_ITEMS g)
   {
       switch(g)
