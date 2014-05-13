@@ -10,6 +10,6 @@ let $archive := a:create(
 return
   string-join(
     for $a in a:entries($archive)
-    return a:extract-text($archive, $a/text())
+    return a:extract-text($archive, $a("name"))
   ) eq concat($foo-content, $bar-content)
  
