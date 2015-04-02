@@ -645,13 +645,13 @@ zorba::Item ArchiveModule::globalEncodingKey;
         archive_entry_set_filetype(theEntry, AE_IFREG);
         lDeleteStream = getStream(
           aEntry, aFile, lStream, lFileSize);
+        archive_entry_set_perm(theEntry, 0644);
       } else {
         archive_entry_set_filetype(theEntry, AE_IFDIR);
         lDeleteStream = false;
         lFileSize = 0;
+        archive_entry_set_perm(theEntry, 0775);
       }
-      // TODO: specifies the permits of a file
-      archive_entry_set_perm(theEntry, 0644);
       archive_entry_set_size(theEntry, lFileSize);
 
       if (theOptions.getFormat() == "ZIP")
