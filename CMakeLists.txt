@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+MESSAGE(STATUS "")
+MESSAGE(STATUS "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+MESSAGE(STATUS "Configuring external module <archive>")
+MESSAGE(STATUS "-------------------------------------------------------------")
+MESSAGE(STATUS "")
+
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
 PROJECT (zorba_archive_module)
@@ -35,7 +41,12 @@ INCLUDE ("${Zorba_USE_FILE}")
 
 IF (ZORBA_SUPPRESS_LIBARCHIVE)
   MESSAGE (STATUS "ZORBA_SUPRESS_LIBARCHIVE is true - not searching for LibArchive.")
-ELSE (ZORBA_SUPRESS_LINARCHIVE)
+  
+  MESSAGE(STATUS "")
+  MESSAGE(STATUS "-------------------------------------------------------------")  
+  MESSAGE(STATUS "Configuration SUPPRESSED for external module <archive>")
+  
+ELSE (ZORBA_SUPPRESS_LIBARCHIVE)
   
   MESSAGE (STATUS "Looking for LibArchive")
   FIND_PACKAGE (LibArchive)
@@ -45,10 +56,21 @@ ELSE (ZORBA_SUPRESS_LINARCHIVE)
     INCLUDE_DIRECTORIES (${LIBARCHIVE_INCLUDE_DIR})  
 
     ADD_SUBDIRECTORY("src")
-    ADD_TEST_DIRECTORY("${PROJECT_SOURCE_DIR}/test")
+    ADD_TEST_DIRECTORY("${PROJECT_SOURCE_DIR}/test")    
+    
+    MESSAGE(STATUS "")
+    MESSAGE(STATUS "-------------------------------------------------------------")
+    MESSAGE(STATUS "Configuration SUCCEEDED for external module <archive>")
   ELSE (LIBARCHIVE_FOUND)
     MESSAGE (STATUS "LibArchive library not found == if you want to use the archive functionality please set LIBARCHIVE_INCLUDE_DIR and LIBARCHIVE_LIBRARIES cmake parameters accordingly.")
+    
+    MESSAGE(STATUS "")
+    MESSAGE(STATUS "-------------------------------------------------------------")
+    MESSAGE(STATUS "Configuration FAILED for external module <archive>")
+     
   ENDIF (LIBARCHIVE_FOUND)
 ENDIF (ZORBA_SUPPRESS_LIBARCHIVE)
 
 DONE_DECLARING_ZORBA_URIS()
+
+MESSAGE(STATUS "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
