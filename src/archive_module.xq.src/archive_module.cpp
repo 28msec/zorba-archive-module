@@ -935,10 +935,10 @@ zorba::Item ArchiveModule::globalEncodingKey;
       ArchiveFunction::throwError(
           ERROR_CORRUPTED_ARCHIVE, "internal error (couldn't create archive)");
 
-	  int lErr = archive_read_support_compression_all(theArchive);
+    int lErr = archive_read_support_compression_all(theArchive);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
 
-	  archive_read_support_format_all(theArchive);
+    archive_read_support_format_all(theArchive);
     ArchiveFunction::checkForError(lErr, 0, theArchive);
 
     if (theArchiveItem.isStreamable())
@@ -1267,6 +1267,9 @@ zorba::Item ArchiveModule::globalEncodingKey;
 
       if (s == 0) break;
 
+      if (s < 0)
+        throwError(ERROR_CORRUPTED_ARCHIVE, archive_error_string(theArchive));
+
       lResult.append(lBuf, s);
     }
 
@@ -1358,6 +1361,9 @@ zorba::Item ArchiveModule::globalEncodingKey;
           theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
 
       if (s == 0) break;
+
+      if (s < 0)
+        throwError(ERROR_CORRUPTED_ARCHIVE, archive_error_string(theArchive));
 
       lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
     }
@@ -1465,6 +1471,9 @@ zorba::Item ArchiveModule::globalEncodingKey;
           theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
      
         if (s == 0) break;
+
+        if (s < 0)
+          throwError(ERROR_CORRUPTED_ARCHIVE, archive_error_string(theArchive));
 
         lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
       }
@@ -1647,6 +1656,9 @@ zorba::Item ArchiveModule::globalEncodingKey;
           theArchive, &lBuf[0], ZORBA_ARCHIVE_MAX_READ_BUF);
      
         if (s == 0) break;
+
+        if (s < 0)
+          throwError(ERROR_CORRUPTED_ARCHIVE, archive_error_string(theArchive));
 
         lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
       }
