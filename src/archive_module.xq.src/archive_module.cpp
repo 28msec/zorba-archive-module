@@ -1359,6 +1359,9 @@ zorba::Item ArchiveModule::globalEncodingKey;
 
       if (s == 0) break;
 
+      if (s < 0)
+        throwError(ERROR_CORRUPTED_ARCHIVE, archive_error_string(theArchive));
+
       lResult.insert(lResult.end(), lBuf.begin(), lBuf.begin() + s);
     }
 
